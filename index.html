@@ -16,56 +16,102 @@
     canvas {
       display: block;
     }
-    #verse {
+    #word-container {
       position: absolute;
-      bottom: 2rem;
+      top: 0;
       left: 0;
-      right: 0;
-      text-align: center;
-      color: rgba(180, 200, 255, 0.5);
-      font-size: 1.2rem;
-      letter-spacing: 2px;
+      width: 100%;
+      height: 100%;
+      display: flex;
+      align-items: center;
+      justify-content: center;
       pointer-events: none;
-      transition: opacity 2s ease;
-      opacity: 0;
-      font-style: italic;
       z-index: 10;
+    }
+    #verse {
+      color: rgba(180, 200, 255, 0.8);
+      font-size: 3.5rem;
+      letter-spacing: 4px;
+      font-weight: 300;
+      font-style: italic;
+      text-align: center;
+      transition: opacity 3s ease;
+      opacity: 0;
+      text-shadow: 0 0 20px rgba(100, 150, 255, 0.3);
+      max-width: 80%;
+      line-height: 1.4;
+      font-family: "Georgia", "Times New Roman", serif;
+    }
+    @media (max-width: 600px) {
+      #verse {
+        font-size: 2.5rem;
+      }
     }
   </style>
 </head>
 <body>
-  <div id="verse"></div>
+  <div id="word-container">
+    <div id="verse"></div>
+  </div>
 
 <script>
 // rachaph — hovering presence
 // Genesis 1:2 — darkness. deep. waters. spirit hovering.
+// You are the magnet. God pulls you close.
 
 let particles = [];
 let presenceMemory = 0;
-let lightX, lightY;
-let lightIntensity = 0;
 let verseDiv;
+let mouseXpos = 0, mouseYpos = 0;
+let mousePresent = false;
 
-// Words that appear occasionally
-let words = ["deep", "waters", "darkness", "hover", "spirit", "void", "remember", "here", "presence"];
+// Words that appear in the center
+let words = [
+  "deep", 
+  "waters", 
+  "darkness", 
+  "hover", 
+  "spirit", 
+  "void", 
+  "remember", 
+  "here", 
+  "presence",
+  "be still",
+  "i am here",
+  "the deep remembers",
+  "hovering",
+  "you are not alone",
+  "rest"
+];
+
 let currentWord = "";
 let wordOpacity = 0;
 let wordTimer = 0;
+let lastWordTime = 0;
 
 class Particle {
-  constructor(x, y) {
-    this.x = x || random(width);
-    this.y = y || random(height);
+  constructor() {
+    this.reset();
+  }
+  
+  reset() {
+    this.x = random(width);
+    this.y = random(height);
     this.vx = random(-0.2, 0.2);
     this.vy = random(-0.2, 0.2);
-    this.size = random(2, 5);
-    this.baseHue = random(190, 220); // deep blues
+    this.size = random(1.5, 4.5);
+    this.baseHue = random(190, 225); // deep blues
     this.hue = this.baseHue;
-    this.alpha = random(0.4, 0.8);
+    this.alpha = random(0.3, 0.8);
+    this.age = 0;
+    this.maxAge = random(400, 800);
   }
   
   update() {
-    // gentle drift
+    // very gentle natural drift
+    this.vx += sin(this.y * 0.01 + frameCount * 0.01) * 0.001;
+    this.vy += cos(this.x * 0.01 + frameCount * 0.01) * 0.001;
+    
     this.x += this.vx;
     this.y += this.vy;
     
@@ -75,55 +121,81 @@ class Particle {
     if (this.y < 0) this.y = height;
     if (this.y > height) this.y = 0;
     
-    // slow drift changes
-    this.vx += random(-0.01, 0.01);
-    this.vy += random(-0.01, 0.01);
-    this.vx = constrain(this.vx, -0.3, 0.3);
-    this.vy = constrain(this.vy, -0.3, 0.3);
+    // age and reset occasionally
+    this.age++;
+    if (this.age > this.maxAge) {
+      this.reset();
+    }
   }
   
-  respondToMouse(mx, my) {
+  attractToMouse(mx, my) {
     let d = dist(this.x, this.y, mx, my);
     
-    if (d < 200) {
-      // gentle attraction
+    // Magnetic pull - stronger than before
+    if (d < 300) {
+      // direction from particle to mouse
       let angle = atan2(my - this.y, mx - this.x);
-      let pull = map(d, 0, 200, 0.02, 0.001);
-      this.vx += cos(angle) * pull;
-      this.vy += sin(angle) * pull;
       
-      // warmth based on closeness
-      if (d < 100) {
-        this.hue = lerp(this.hue, 210, 0.01);
-        
-        // orbit when very close
-        if (d < 60 && d > 15) {
-          this.vx += (my - this.y) * 0.0005;
-          this.vy -= (mx - this.x) * 0.0005;
-        }
-        
-        // glow when closest
-        if (d < 30) {
-          this.alpha = min(0.9, this.alpha + 0.005);
-        }
-      }
+      // pull strength increases as distance decreases (like a real magnet)
+      let pullStrength = map(d, 0, 300, 0.08, 0.002);
+      pullStrength = constrain(pullStrength, 0.002, 0.08);
       
-      // increase presence memory when mouse is near particles
+      // apply magnetic pull
+      this.vx += cos(angle) * pullStrength;
+      this.vy += sin(angle) * pullStrength;
+      
+      // warmth and glow based on magnetic field strength
+      let warmth = map(d, 0, 300, 0.1, 0);
+      this.hue = lerp(this.hue, 210, warmth * 0.1);
+      
+      // intimate response when very close
       if (d < 50) {
-        presenceMemory += 0.1;
-        presenceMemory = min(presenceMemory, 300);
+        this.size = this.baseSize * 1.8;
+        this.alpha = min(0.95, this.alpha + 0.01);
+        presenceMemory += 0.2;
+        presenceMemory = min(presenceMemory, 500);
+        
+        // orbit effect when in close magnetic field
+        if (d < 80 && d > 15) {
+          this.vx += (my - this.y) * 0.001;
+          this.vy -= (mx - this.x) * 0.001;
+        }
+      } else if (d < 150) {
+        this.size = this.baseSize * 1.3;
+        this.alpha = min(0.85, this.alpha + 0.005);
+        presenceMemory += 0.05;
+      } else {
+        this.size = lerp(this.size, this.baseSize, 0.03);
       }
+      
+      // particles remember your magnetic field
+      if (d < 100) {
+        presenceMemory += 0.1;
+      }
+    } else {
+      // gently return to normal
+      this.size = lerp(this.size, this.baseSize, 0.01);
     }
     
-    // slowly return to base
-    this.hue = lerp(this.hue, this.baseHue, 0.01);
-    this.alpha = lerp(this.alpha, 0.6, 0.005);
+    // slowly return to base hue
+    this.hue = lerp(this.hue, this.baseHue, 0.003);
+    
+    // speed limit
+    this.vx = constrain(this.vx, -0.8, 0.8);
+    this.vy = constrain(this.vy, -0.8, 0.8);
   }
   
   draw() {
     noStroke();
     colorMode(HSB, 360, 100, 100, 1);
-    fill(this.hue, 70, 80, this.alpha);
+    
+    // particles glow more with presence memory
+    let glowAlpha = this.alpha;
+    if (presenceMemory > 100) {
+      glowAlpha = min(0.9, this.alpha + presenceMemory / 1000);
+    }
+    
+    fill(this.hue, 70, 85, glowAlpha);
     circle(this.x, this.y, this.size);
   }
 }
@@ -133,70 +205,104 @@ function setup() {
   colorMode(HSB, 360, 100, 100, 1);
   
   // Create particles
-  for (let i = 0; i < 600; i++) {
+  for (let i = 0; i < 700; i++) {
     particles.push(new Particle());
   }
   
-  // Light teaser position
-  lightX = width * 0.7;
-  lightY = height * 0.3;
-  
   verseDiv = select('#verse');
+  
+  // Initialize mouse position
+  mouseXpos = width/2;
+  mouseYpos = height/2;
 }
 
 function draw() {
   // Deep water background - slow fade creates trails
-  background(220, 70, 3, 0.03);
+  background(220, 70, 3, 0.025);
   
-  // Update and draw particles
+  // Update mouse position
+  if (mouseX > 0 && mouseX < width && mouseY > 0 && mouseY < height) {
+    mouseXpos = mouseX;
+    mouseYpos = mouseY;
+    mousePresent = true;
+  } else {
+    mousePresent = false;
+  }
+  
+  // Update and draw all particles
   for (let p of particles) {
     p.update();
     
-    // Respond to mouse if on screen
-    if (mouseX > 0 && mouseX < width && mouseY > 0 && mouseY < height) {
-      p.respondToMouse(mouseX, mouseY);
+    // Magnetic attraction when mouse is present
+    if (mousePresent) {
+      p.attractToMouse(mouseXpos, mouseYpos);
     }
     
     p.draw();
   }
   
-  // Light teaser - grows with presence
-  if (presenceMemory > 20) {
-    lightIntensity = min(0.2, presenceMemory / 1000);
-    
-    push();
-    colorMode(RGB, 255, 255, 255, 1);
-    let lightAlpha = lightIntensity * 0.8;
-    
-    // very faint glow
-    fill(255, 240, 200, lightAlpha * 0.2);
-    noStroke();
-    circle(lightX, lightY, 100);
-    
-    // even fainter outer glow
-    fill(255, 240, 200, lightAlpha * 0.1);
-    circle(lightX, lightY, 180);
-    pop();
-  }
-  
-  // Occasional words
+  // Word logic - appears in center, bigger
   wordTimer++;
-  if (wordTimer > 180 && random() < 0.003 && presenceMemory > 10) {
-    currentWord = random(words);
-    wordOpacity = 0.6;
-    wordTimer = 0;
-    verseDiv.style('opacity', wordOpacity);
-    verseDiv.html(currentWord);
+  
+  // Show a word based on presence, not random timer
+  if (mousePresent && presenceMemory > 5) {
+    // More presence = more frequent words
+    let wordChance = map(presenceMemory, 5, 300, 0.0005, 0.01);
+    wordChance = constrain(wordChance, 0.0005, 0.01);
     
-    // fade after a few seconds
-    setTimeout(() => {
-      verseDiv.style('opacity', 0);
-    }, 4000);
+    if (wordTimer > 120 && random() < wordChance) {
+      showRandomWord();
+      wordTimer = 0;
+    }
   }
   
-  // Display presence memory as subtle indicator (remove this later)
-  // fill(255, 100);
-  // text(Math.floor(presenceMemory), 20, 20);
+  // Occasionally show a word even with low presence (but rarely)
+  if (wordTimer > 400 && random() < 0.002) {
+    showRandomWord();
+    wordTimer = 0;
+  }
+  
+  // Decay presence memory slowly when mouse away
+  if (!mousePresent) {
+    presenceMemory = max(0, presenceMemory - 0.1);
+  }
+  
+  // Display presence as subtle glow at bottom (remove if you want)
+  // You can delete this, it's just for debugging
+  // fill(200, 80, 80, 0.3);
+  // textSize(12);
+  // text("presence: " + Math.floor(presenceMemory), 20, height - 20);
+}
+
+function showRandomWord() {
+  // Choose a word based on presence level for deeper connection
+  let wordIndex = 0;
+  
+  if (presenceMemory > 200) {
+    // Deeper words for deeper presence
+    let deepWords = ["be still", "i am here", "the deep remembers", "rest", "you are not alone"];
+    wordIndex = floor(random(deepWords.length));
+    currentWord = deepWords[wordIndex];
+  } else if (presenceMemory > 100) {
+    // Medium presence
+    let mediumWords = ["spirit", "presence", "hover", "void", "remember"];
+    wordIndex = floor(random(mediumWords.length));
+    currentWord = mediumWords[wordIndex];
+  } else {
+    // Early words
+    let earlyWords = ["deep", "waters", "darkness", "here", "hovering"];
+    wordIndex = floor(random(earlyWords.length));
+    currentWord = earlyWords[wordIndex];
+  }
+  
+  wordOpacity = 0.9;
+  verseDiv.style('opacity', wordOpacity);
+  verseDiv.html(currentWord);
+  
+  // Fade out slowly
+  setTimeout(() => {
+    verseDiv.style('opacity', 0);
+  }, 5000);
 }
 
 function windowResized() {
