@@ -1,1 +1,180 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Rachaph — Hovering Presence</title>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/p5.js/1.9.4/p5.min.js"></script>
+  <style>
+    body { margin:0; background:#000814; overflow:hidden; font-family:Georgia,serif; }
+    canvas { display:block; }
+    #words { position:absolute; top:50%; left:50%; transform:translate(-50%,-50%); color:#f0f4ff; font-size:2.2rem; opacity:0; text-align:center; pointer-events:none; }
+  </style>
+</head>
+<body>
+<div id="words"></div>
 
+<script>
+// Rachaph — Hovering Presence
+// Genesis 1:2 before the words: deep darkness, waters, gentle hovering forms life
+
+let particles = [];
+let totalHoverTime = 0;
+let lastX = 0, lastY = 0;
+let wordIndex = 0;
+const genesisWords = [
+  "Let there be light…",
+  "Let there be a firmament…",
+  "Let the waters gather…",
+  "Let the earth bring forth…",
+  "Let there be lights in the sky…",
+  "Let the waters teem…",
+  "Let us make humankind…"
+];
+
+class Particle {
+  constructor() {
+    this.x = random(width);
+    this.y = random(height);
+    this.vx = random(-0.6, 0.6);
+    this.vy = random(-0.6, 0.6);
+    this.size = random(2.5, 6);
+    this.hue = 200;               // deep midnight blue
+    this.alpha = 0.7;
+  }
+  
+  update() {
+    this.x += this.vx;
+    this.y += this.vy;
+    if (this.x < 0) this.x = width;
+    if (this.x > width) this.x = 0;
+    if (this.y < 0) this.y = height;
+    if (this.y > height) this.y = 0;
+  }
+  
+  draw() {
+    noStroke();
+    fill(this.hue, 60, 80, this.alpha);
+    circle(this.x, this.y, this.size);
+  }
+}
+
+function setup() {
+  createCanvas(windowWidth, windowHeight);
+  colorMode(HSB, 360, 100, 100, 1);
+  
+  for (let i = 0; i < 1200; i++) {
+    particles.push(new Particle());
+  }
+}
+
+function draw() {
+  background(220, 80, 5, 0.04);   // very slow dark blue fade
+  
+  // update & draw particles (water-like drift)
+  for (let p of particles) {
+    p.update();
+    p.draw();
+  }
+  
+  // Hover detection
+  let moved = dist(mouseX, mouseY, lastX, lastY);
+  if (moved < 10) {
+    totalHoverTime++;
+  } else {
+    totalHoverTime = max(0, totalHoverTime - 1.5);   // gentle decay
+  }
+  lastX = mouseX; lastY = mouseY;
+  
+  // === Progression Table Implementation ===
+  
+  // 0-10s: Drift toward cursor (curiosity, calm)
+  if (totalHoverTime > 10) {
+    for (let p of particles) {
+      let d = dist(p.x, p.y, mouseX, mouseY);
+      if (d < 250) {
+        p.vx = lerp(p.vx, (mouseX - p.x) * 0.005, 0.08);
+        p.vy = lerp(p.vy, (mouseY - p.y) * 0.005, 0.08);
+      }
+    }
+  }
+  
+  // 10-20s: Begin orbiting + faint warmth
+  if (totalHoverTime > 25) {
+    for (let p of particles) {
+      let d = dist(p.x, p.y, mouseX, mouseY);
+      if (d < 180 && d > 25) {
+        p.vx += (mouseY - p.y) * 0.0035;   // orbit
+        p.vy -= (mouseX - p.x) * 0.0035;
+        p.hue = lerp(p.hue, 195, 0.02);    // warmer blue
+      }
+    }
+  }
+  
+  // 20-30s: Glow softly
+  if (totalHoverTime > 45) {
+    for (let p of particles) {
+      let d = dist(p.x, p.y, mouseX, mouseY);
+      if (d < 160) {
+        p.hue = lerp(p.hue, 180, 0.03);    // cyan life hint
+        p.alpha = lerp(p.alpha, 0.9, 0.02);
+      }
+    }
+  }
+  
+  // 30-45s: Void thins — presence map
+  if (totalHoverTime > 70) {
+    for (let p of particles) {
+      let d = dist(p.x, p.y, mouseX, mouseY);
+      if (d < 130) {
+        p.size = lerp(p.size, 1.5, 0.06);   // thin out
+      }
+    }
+  }
+  
+  // 45-60s: Soft contact glow
+  if (totalHoverTime > 95) {
+    for (let p of particles) {
+      let d = dist(p.x, p.y, mouseX, mouseY);
+      if (d < 40) {
+        p.hue = 140;   // green flash
+        p.size = 8;
+      }
+    }
+  }
+  
+  // 60+ sec: Light emerges (first words appear)
+  if (totalHoverTime > 130 && wordIndex < genesisWords.length) {
+    background(40, 20, 98, 0.015);   // dawn light bleed
+    for (let p of particles) {
+      p.hue = lerp(p.hue, 60, 0.015);   // warm light
+    }
+    
+    // Show next word when hovering continues
+    if (totalHoverTime % 300 === 0 && totalHoverTime > 130 + wordIndex * 300) {
+      wordIndex++;
+      let word = genesisWords[wordIndex - 1];
+      document.getElementById('words').innerText = word;
+      document.getElementById('words').style.opacity = 0.7;
+      setTimeout(() => {
+        document.getElementById('words').style.opacity = 0;
+      }, 8000);   // fade after 8 sec
+    }
+  }
+  
+  // Ongoing: Persistent stars where you stayed long
+  if (totalHoverTime > 180) {
+    fill(60, 30, 100, 0.8);
+    for (let i = 0; i < 6; i++) {
+      let starX = mouseX + random(-100, 100);
+      let starY = mouseY + random(-100, 100);
+      circle(starX, starY, 1.8);
+    }
+  }
+}
+
+function windowResized() {
+  resizeCanvas(windowWidth, windowHeight);
+}
+</script>
+</body>
+</html>
