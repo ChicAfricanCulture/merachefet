@@ -22,83 +22,50 @@
       left: 0;
       right: 0;
       text-align: center;
-      color: rgba(180, 200, 255, 0.25);
+      color: rgba(180, 200, 255, 0.5);
       font-size: 1.2rem;
       letter-spacing: 2px;
       pointer-events: none;
-      transition: opacity 4s ease;
+      transition: opacity 2s ease;
       opacity: 0;
       font-style: italic;
-    }
-    #presence {
-      position: absolute;
-      top: 1.5rem;
-      right: 1.5rem;
-      color: rgba(100, 140, 255, 0.2);
-      font-size: 0.8rem;
-      letter-spacing: 3px;
-      text-transform: uppercase;
-      pointer-events: none;
-      writing-mode: vertical-rl;
+      z-index: 10;
     }
   </style>
 </head>
 <body>
   <div id="verse"></div>
-  <div id="presence"> hovering </div>
 
 <script>
 // rachaph — hovering presence
 // Genesis 1:2 — darkness. deep. waters. spirit hovering.
-// The void responds immediately. God is here now.
 
 let particles = [];
-let audioContext = null;
-let rainGain = null;
-let hoverGain = null;
-let lightGain = null;
-let rainStarted = false;
-
-// Light teaser
+let presenceMemory = 0;
 let lightX, lightY;
 let lightIntensity = 0;
-let lightVisible = false;
-let presenceMemory = 0; // accumulates presence over time
+let verseDiv;
 
-// Words
+// Words that appear occasionally
 let words = ["deep", "waters", "darkness", "hover", "spirit", "void", "remember", "here", "presence"];
 let currentWord = "";
 let wordOpacity = 0;
 let wordTimer = 0;
 
 class Particle {
-  constructor() {
-    this.reset();
-  }
-  
-  reset() {
-    this.x = random(width);
-    this.y = random(height);
-    this.vx = random(-0.3, 0.3);
-    this.vy = random(-0.3, 0.3);
-    this.baseSize = random(1.5, 4);
-    this.size = this.baseSize;
+  constructor(x, y) {
+    this.x = x || random(width);
+    this.y = y || random(height);
+    this.vx = random(-0.2, 0.2);
+    this.vy = random(-0.2, 0.2);
+    this.size = random(2, 5);
     this.baseHue = random(190, 220); // deep blues
     this.hue = this.baseHue;
     this.alpha = random(0.4, 0.8);
-    this.age = 0;
-    this.maxAge = random(300, 600);
   }
   
   update() {
-    // very slow drift with gentle currents
-    this.vx += sin(this.y * 0.01) * 0.001;
-    this.vy += cos(this.x * 0.01) * 0.001;
-    
-    // speed limit
-    this.vx = constrain(this.vx, -0.5, 0.5);
-    this.vy = constrain(this.vy, -0.5, 0.5);
-    
+    // gentle drift
     this.x += this.vx;
     this.y += this.vy;
     
@@ -108,59 +75,56 @@ class Particle {
     if (this.y < 0) this.y = height;
     if (this.y > height) this.y = 0;
     
-    // age and reset occasionally for variety
-    this.age++;
-    if (this.age > this.maxAge) {
-      this.reset();
-    }
+    // slow drift changes
+    this.vx += random(-0.01, 0.01);
+    this.vy += random(-0.01, 0.01);
+    this.vx = constrain(this.vx, -0.3, 0.3);
+    this.vy = constrain(this.vy, -0.3, 0.3);
   }
   
-  draw() {
-    noStroke();
-    colorMode(HSB, 360, 100, 100, 1);
-    fill(this.hue, 60, 80, this.alpha);
-    circle(this.x, this.y, this.size);
-  }
-  
-  respondToMouse(mx, my, strength) {
+  respondToMouse(mx, my) {
     let d = dist(this.x, this.y, mx, my);
     
-    // Immediate response based on distance
     if (d < 200) {
-      // attraction toward mouse
+      // gentle attraction
       let angle = atan2(my - this.y, mx - this.x);
-      let pull = map(d, 0, 200, 0.03, 0.001) * strength;
+      let pull = map(d, 0, 200, 0.02, 0.001);
       this.vx += cos(angle) * pull;
       this.vy += sin(angle) * pull;
       
       // warmth based on closeness
       if (d < 100) {
-        this.hue = lerp(this.hue, 210, 0.02); // warmer blue
+        this.hue = lerp(this.hue, 210, 0.01);
         
-        // orbit effect when very close
-        if (d < 60 && d > 20) {
-          this.vx += (my - this.y) * 0.0008 * strength;
-          this.vy -= (mx - this.x) * 0.0008 * strength;
+        // orbit when very close
+        if (d < 60 && d > 15) {
+          this.vx += (my - this.y) * 0.0005;
+          this.vy -= (mx - this.x) * 0.0005;
         }
         
-        // intimate glow when closest
+        // glow when closest
         if (d < 30) {
-          this.size = this.baseSize * 1.5;
-          this.alpha = min(0.9, this.alpha + 0.01);
-          this.hue = lerp(this.hue, 200, 0.05);
-        } else {
-          this.size = lerp(this.size, this.baseSize, 0.05);
+          this.alpha = min(0.9, this.alpha + 0.005);
         }
       }
       
-      // particles remember where you've been
+      // increase presence memory when mouse is near particles
       if (d < 50) {
-        presenceMemory += 0.02;
+        presenceMemory += 0.1;
+        presenceMemory = min(presenceMemory, 300);
       }
     }
     
-    // very slow return to base hue
-    this.hue = lerp(this.hue, this.baseHue, 0.005);
+    // slowly return to base
+    this.hue = lerp(this.hue, this.baseHue, 0.01);
+    this.alpha = lerp(this.alpha, 0.6, 0.005);
+  }
+  
+  draw() {
+    noStroke();
+    colorMode(HSB, 360, 100, 100, 1);
+    fill(this.hue, 70, 80, this.alpha);
+    circle(this.x, this.y, this.size);
   }
 }
 
@@ -168,202 +132,75 @@ function setup() {
   createCanvas(windowWidth, windowHeight);
   colorMode(HSB, 360, 100, 100, 1);
   
-  // initialize particles
-  for (let i = 0; i < 800; i++) {
+  // Create particles
+  for (let i = 0; i < 600; i++) {
     particles.push(new Particle());
   }
   
-  // light teaser position (somewhere in the void)
-  lightX = random(width * 0.3, width * 0.7);
-  lightY = random(height * 0.3, height * 0.7);
+  // Light teaser position
+  lightX = width * 0.7;
+  lightY = height * 0.3;
   
-  // initialize audio on first interaction
-  userStartAudio();
+  verseDiv = select('#verse');
 }
 
 function draw() {
-  // deep water background - very slow fade
-  background(220, 70, 3, 0.02);
+  // Deep water background - slow fade creates trails
+  background(220, 70, 3, 0.03);
   
-  // update and draw particles
+  // Update and draw particles
   for (let p of particles) {
     p.update();
     
-    // immediate mouse response - strength based on movement
-    let mouseSpeed = dist(mouseX, mouseY, pmouseX, pmouseY);
-    let responseStrength = constrain(map(mouseSpeed, 0, 20, 0.8, 1.5), 0.5, 2.0);
-    
+    // Respond to mouse if on screen
     if (mouseX > 0 && mouseX < width && mouseY > 0 && mouseY < height) {
-      p.respondToMouse(mouseX, mouseY, responseStrength);
+      p.respondToMouse(mouseX, mouseY);
     }
     
     p.draw();
   }
   
-  // draw light teaser (very faint, grows with presence)
-  if (presenceMemory > 30) {
-    lightVisible = true;
-    lightIntensity = min(0.15, presenceMemory / 800);
-  } else {
-    lightIntensity = max(0, lightIntensity - 0.0005);
-    lightVisible = lightIntensity > 0.01;
-  }
-  
-  if (lightVisible) {
+  // Light teaser - grows with presence
+  if (presenceMemory > 20) {
+    lightIntensity = min(0.2, presenceMemory / 1000);
+    
     push();
     colorMode(RGB, 255, 255, 255, 1);
     let lightAlpha = lightIntensity * 0.8;
     
-    // very subtle glow
-    for (let i = 0; i < 3; i++) {
-      let size = 80 + i * 40;
-      let alpha = lightAlpha / (i + 1);
-      fill(255, 240, 200, alpha * 0.3);
-      noStroke();
-      circle(lightX, lightY, size);
-    }
+    // very faint glow
+    fill(255, 240, 200, lightAlpha * 0.2);
+    noStroke();
+    circle(lightX, lightY, 100);
     
-    // occasional flicker
-    if (frameCount % 120 === 0 && random() < 0.3) {
-      fill(255, 250, 210, lightAlpha * 0.5);
-      circle(lightX, lightY, 150);
-    }
+    // even fainter outer glow
+    fill(255, 240, 200, lightAlpha * 0.1);
+    circle(lightX, lightY, 180);
     pop();
   }
   
-  // occasional word appears (rare, gentle)
+  // Occasional words
   wordTimer++;
-  if (wordTimer > 300 && random() < 0.005 && presenceMemory > 15) {
+  if (wordTimer > 180 && random() < 0.003 && presenceMemory > 10) {
     currentWord = random(words);
-    wordOpacity = 0.4;
+    wordOpacity = 0.6;
     wordTimer = 0;
-    document.getElementById('verse').style.opacity = wordOpacity;
-    document.getElementById('verse').innerText = currentWord;
+    verseDiv.style('opacity', wordOpacity);
+    verseDiv.html(currentWord);
+    
+    // fade after a few seconds
+    setTimeout(() => {
+      verseDiv.style('opacity', 0);
+    }, 4000);
   }
   
-  // fade word slowly
-  if (wordOpacity > 0) {
-    wordOpacity -= 0.0005;
-    document.getElementById('verse').style.opacity = wordOpacity;
-  }
-  
-  // update hovering text rotation
-  let hoverAlpha = map(presenceMemory, 0, 100, 0.1, 0.5);
-  document.getElementById('presence').style.color = `rgba(140, 180, 255, ${hoverAlpha})`;
-}
-
-// initialize audio on first interaction
-function mouseMoved() {
-  if (!rainStarted) {
-    initAudio();
-    rainStarted = true;
-  }
-}
-
-function touchMoved() {
-  if (!rainStarted) {
-    initAudio();
-    rainStarted = true;
-  }
-  return false;
-}
-
-function initAudio() {
-  try {
-    audioContext = new (window.AudioContext || window.webkitAudioContext)();
-    
-    // master gain
-    let masterGain = audioContext.createGain();
-    masterGain.gain.value = 0.3;
-    masterGain.connect(audioContext.destination);
-    
-    // rain sound - filtered noise
-    let rainBufferSize = 2 * audioContext.sampleRate;
-    let rainBuffer = audioContext.createBuffer(1, rainBufferSize, audioContext.sampleRate);
-    let rainData = rainBuffer.getChannelData(0);
-    for (let i = 0; i < rainBufferSize; i++) {
-      rainData[i] = Math.random() * 2 - 1;
-    }
-    
-    let rainSource = audioContext.createBufferSource();
-    rainSource.buffer = rainBuffer;
-    rainSource.loop = true;
-    
-    let rainFilter = audioContext.createBiquadFilter();
-    rainFilter.type = "bandpass";
-    rainFilter.frequency.value = 1200;
-    rainFilter.Q.value = 0.5;
-    
-    rainGain = audioContext.createGain();
-    rainGain.gain.value = 0.15;
-    
-    rainSource.connect(rainFilter);
-    rainFilter.connect(rainGain);
-    rainGain.connect(masterGain);
-    rainSource.start();
-    
-    // hover presence - very low frequency hum
-    let hoverOsc = audioContext.createOscillator();
-    hoverOsc.type = "sine";
-    hoverOsc.frequency.value = 60;
-    
-    hoverGain = audioContext.createGain();
-    hoverGain.gain.value = 0.02;
-    
-    let hoverFilter = audioContext.createBiquadFilter();
-    hoverFilter.type = "lowpass";
-    hoverFilter.frequency.value = 200;
-    
-    hoverOsc.connect(hoverFilter);
-    hoverFilter.connect(hoverGain);
-    hoverGain.connect(masterGain);
-    hoverOsc.start();
-    
-    // light teaser tone (very faint, grows with light)
-    let lightOsc = audioContext.createOscillator();
-    lightOsc.type = "sine";
-    lightOsc.frequency.value = 280;
-    
-    lightGain = audioContext.createGain();
-    lightGain.gain.value = 0;
-    
-    let lightFilter = audioContext.createBiquadFilter();
-    lightFilter.type = "lowpass";
-    lightFilter.frequency.value = 400;
-    
-    lightOsc.connect(lightFilter);
-    lightFilter.connect(lightGain);
-    lightGain.connect(masterGain);
-    lightOsc.start();
-    
-    // connect presence to light sound
-    setInterval(() => {
-      if (lightGain && presenceMemory > 40) {
-        let targetGain = map(presenceMemory, 40, 200, 0.005, 0.03);
-        lightGain.gain.linearRampToValueAtTime(targetGain, audioContext.currentTime + 1);
-      } else if (lightGain) {
-        lightGain.gain.linearRampToValueAtTime(0, audioContext.currentTime + 1);
-      }
-      
-      // modulate rain slightly based on presence
-      if (rainGain && presenceMemory > 10) {
-        let rainTarget = 0.15 + map(presenceMemory, 10, 200, 0, 0.1);
-        rainGain.gain.linearRampToValueAtTime(rainTarget, audioContext.currentTime + 2);
-      }
-    }, 1000);
-    
-  } catch (e) {
-    console.log("Audio not supported or blocked");
-  }
+  // Display presence memory as subtle indicator (remove this later)
+  // fill(255, 100);
+  // text(Math.floor(presenceMemory), 20, 20);
 }
 
 function windowResized() {
   resizeCanvas(windowWidth, windowHeight);
-  // reset particle positions gently
-  for (let p of particles) {
-    if (p.x > width) p.x = random(width);
-    if (p.y > height) p.y = random(height);
-  }
 }
 </script>
 </body>
