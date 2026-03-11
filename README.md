@@ -44,7 +44,7 @@ MIT
 
 Find It Here
 
-Play it at: [your-github-username.github.io/merachefet]
+Play it at: https://chicafricanculture.github.io/merachefet/
 
 A Quiet Invitation
 
