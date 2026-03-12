@@ -4,6 +4,7 @@
   <meta charset="UTF-8">
   <title>Rachaph — Hovering Presence</title>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/p5.js/1.9.4/p5.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/p5.js/1.9.4/addons/p5.sound.min.js"></script>
   <style>
     body { margin:0; padding:0; overflow:hidden; background:#000308; }
     canvas { display:block; }
@@ -35,15 +36,14 @@
 
 <script>
 // Rachaph — Hovering Presence
-// Deep darkness. Waters. Spirit hovers before words.
-// Tiny round droplets, soothing magnet, pure void blues.
+// Restored meditative droplets. Deep darkness. Soothing magnet. Sound from start.
 
 let particles = [];
 let totalHoverTime = 0;
 let lastX = 0, lastY = 0;
 let wordIndex = -1;
+let ambientSound;
 
-// Your exact word list (Genesis 1:1–3 phrases)
 const genesisWords = [
   "In the beginning",
   "God",
@@ -63,11 +63,11 @@ class Particle {
   constructor() {
     this.x = random(width);
     this.y = random(height);
-    this.vx = random(-0.15, 0.15);
-    this.vy = random(-0.15, 0.15);
-    this.size = random(1, 7);      // teeny-tiny to small droplets
-    this.hue = random(195, 235);   // deepest midnight/indigo blues
-    this.alpha = 0.65;
+    this.vx = random(-0.12, 0.12);  // very slow movement
+    this.vy = random(-0.12, 0.12);
+    this.size = random(0.8, 5);     // tiny to small droplets
+    this.hue = random(200, 240);   // deeper blues
+    this.alpha = 0.62;
   }
 
   update() {
@@ -77,45 +77,61 @@ class Particle {
     if (this.x > width) this.x = 0;
     if (this.y < 0) this.y = height;
     if (this.y > height) this.y = 0;
+    
+    // tiny random jitter to keep natural
+    this.vx += random(-0.01, 0.01);
+    this.vy += random(-0.01, 0.01);
+    this.vx = constrain(this.vx, -0.15, 0.15);
+    this.vy = constrain(this.vy, -0.15, 0.15);
   }
 
   attractTo(mx, my) {
     let d = dist(this.x, this.y, mx, my);
-    if (d < 500) {  // wide gentle pull
-      let pull = map(d, 0, 500, 0.09, 0.001);
+    if (d < 520) {  // wide radius for visible gathering
+      let pull = map(d, 0, 520, 0.07, 0.0008);  // gentle, stronger near
       let angle = atan2(my - this.y, mx - this.x);
       this.vx += cos(angle) * pull;
       this.vy += sin(angle) * pull;
 
-      if (d < 200) {
-        this.vx *= 0.92;   // calm/slow
-        this.vy *= 0.92;
-        this.alpha = lerp(this.alpha, 0.88, 0.008);
-        this.size = lerp(this.size, this.size * 1.1, 0.01);  // gentle droplet swell
+      if (d < 220) {
+        this.vx *= 0.91;   // calm/slow
+        this.vy *= 0.91;
+        this.alpha = lerp(this.alpha, 0.85, 0.008);
+        this.size = lerp(this.size, this.size * 1.08, 0.01);  // subtle swell
       }
     }
   }
 
   draw() {
     noStroke();
-    fill(this.hue, 75, 60, this.alpha);
+    fill(this.hue, 72, 65, this.alpha);
     circle(this.x, this.y, this.size);
   }
+}
+
+function preload() {
+  // Soothing ambient sound (faint wind/water + breathing)
+  ambientSound = loadSound('https://assets.codepen.io/243235/deep-water-ambient.mp3');
 }
 
 function setup() {
   createCanvas(windowWidth, windowHeight);
   colorMode(HSB, 360, 100, 100, 1);
 
-  for (let i = 0; i < 1600; i++) {  // more tiny particles for density
+  for (let i = 0; i < 1800; i++) {  // higher density for full void
     particles.push(new Particle());
   }
 
   verseDiv = select('#verse');
+
+  if (ambientSound) {
+    ambientSound.loop();
+    ambientSound.setVolume(0.06);  // very faint
+  }
 }
 
 function draw() {
-  background(220, 98, 1.5, 0.015);  // ultra-slow deep blue/black fade — pure void
+  background(220, 100, 1, 0.012);  // ultra-slow deep blue/black fade
 
   for (let p of particles) {
     p.update();
@@ -127,30 +143,30 @@ function draw() {
   if (moved < 8) {
     totalHoverTime++;
   } else {
-    totalHoverTime = max(0, totalHoverTime - 0.5);  // very slow decay
+    totalHoverTime = max(0, totalHoverTime - 0.4);  // very slow decay
   }
   lastX = mouseX; lastY = mouseY;
 
   // Genesis words — appear one at a time after calm hovering
-  if (totalHoverTime > 240 && wordIndex < genesisWords.length - 1) {
-    if (frameCount % 1080 === 0) {  // ~18 seconds per word
+  if (totalHoverTime > 180 && wordIndex < genesisWords.length - 1) {
+    if (frameCount % 720 === 0) {  // ~12 seconds per word
       wordIndex++;
       let word = genesisWords[wordIndex];
       verseDiv.html(word);
       verseDiv.style('opacity', 0.68);
       setTimeout(() => {
         verseDiv.style('opacity', 0);
-      }, 18000);  // stay visible 18 seconds
+      }, 18000);  // stay 18 seconds
     }
   }
 
-  // Persistent faint stars/trails where you hovered longest
-  if (totalHoverTime > 300) {
-    fill(60, 55, 100, 0.35);
-    for (let i = 0; i < 4; i++) {
-      let sx = mouseX + random(-90, 90);
-      let sy = mouseY + random(-90, 90);
-      circle(sx, sy, 1.3);
+  // Persistent faint stars where you hovered longest
+  if (totalHoverTime > 320) {
+    fill(60, 60, 100, 0.3);
+    for (let i = 0; i < 3; i++) {
+      let sx = mouseX + random(-80, 80);
+      let sy = mouseY + random(-80, 80);
+      circle(sx, sy, 1.2);
     }
   }
 }
