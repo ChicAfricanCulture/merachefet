@@ -13,6 +13,7 @@
       overflow: hidden;
       background: #01040a;
       touch-action: none;
+      font-family: Georgia, "Times New Roman", serif;
     }
 
     canvas {
@@ -21,187 +22,205 @@
 
     #verse {
       position: absolute;
-      top: 16%;
+      top: 14%;
       left: 50%;
       transform: translateX(-50%);
-      color: rgba(145, 185, 255, 0.54);
-      font-size: 2.8rem;
-      letter-spacing: 0.12em;
+      color: rgba(150, 188, 255, 0.58);
+      font-size: 2.6rem;
+      letter-spacing: 0.08em;
       font-weight: 300;
       font-style: italic;
       text-align: center;
       pointer-events: none;
       opacity: 0;
-      transition: opacity 1.7s ease;
+      transition: opacity 1.1s ease;
       text-shadow: 0 0 18px rgba(70, 120, 255, 0.18);
-      max-width: 90%;
-      line-height: 1.3;
+      max-width: 88%;
+      line-height: 1.35;
       z-index: 2;
     }
 
     #hint {
       position: absolute;
-      bottom: 8%;
+      bottom: 7%;
       left: 50%;
       transform: translateX(-50%);
-      color: rgba(170, 195, 255, 0.26);
-      font-size: 1rem;
-      letter-spacing: 0.08em;
+      color: rgba(176, 197, 255, 0.28);
+      font-size: 0.98rem;
+      letter-spacing: 0.07em;
       text-align: center;
       pointer-events: none;
       opacity: 1;
-      transition: opacity 1.2s ease;
+      transition: opacity 1s ease, color 1s ease;
       z-index: 2;
       white-space: nowrap;
+      max-width: 90%;
     }
 
     @media (max-width: 900px) {
       #verse {
-        font-size: 2.2rem;
+        font-size: 2rem;
       }
     }
 
     @media (max-width: 600px) {
       #verse {
-        font-size: 1.7rem;
-        top: 12%;
-        letter-spacing: 0.06em;
+        font-size: 1.55rem;
+        top: 11%;
+        letter-spacing: 0.04em;
       }
 
       #hint {
-        font-size: 0.9rem;
-        bottom: 7%;
+        font-size: 0.88rem;
         white-space: normal;
-        width: 90%;
+        width: 88%;
       }
     }
   </style>
 </head>
 <body>
   <div id="verse"></div>
-  <div id="hint">move slowly through the deep</div>
+  <div id="hint">move through the deep</div>
 
   <script>
     let particles = [];
     let wakes = [];
+    let farStars = [];
     let verseDiv;
     let hintDiv;
-
-    let totalHoverTime = 0;
-    let pointerStillFrames = 0;
-    let lastPointerX = 0;
-    let lastPointerY = 0;
-    let movementSpeed = 0;
 
     let pointerX = 0;
     let pointerY = 0;
     let pointerActive = false;
+    let lastPointerX = 0;
+    let lastPointerY = 0;
+    let movementSpeed = 0;
 
-    let wordIndex = -1;
-    let introShown = false;
-    let hoverTextCooldown = 0;
-
+    let cameraDriftX = 0;
+    let cameraDriftY = 0;
+    let audioStarted = false;
     let windOsc;
     let breathOsc;
     let windFilter;
-    let noiseEnvReady = false;
-    let audioStarted = false;
 
-    const scriptureMoments = [
-      { text: "In the beginning", trigger: 0, duration: 3800 },
-      { text: "darkness over the deep", trigger: 140, duration: 4200 },
-      { text: "hovering over the waters", trigger: 320, duration: 4600 },
-      { text: "Let there be light", trigger: 620, duration: 5200 }
+    let zones = [];
+    let discoveredCount = 0;
+    let finalLightUnlocked = false;
+    let finalLightActivated = false;
+    let introShown = false;
+
+    const zoneTexts = [
+      "without form",
+      "and void",
+      "darkness",
+      "over the deep",
+      "hovering over the waters"
     ];
+
+    const finalLight = {
+      x: 0.82,
+      y: 0.2,
+      pulse: 0,
+      visible: true
+    };
 
     class Particle {
       constructor() {
         this.x = random(width);
         this.y = random(height);
-        this.vx = random(-0.05, 0.05);
-        this.vy = random(-0.03, 0.03);
-        this.baseSize = random(1.2, 4.2);
+        this.vx = random(-0.04, 0.04);
+        this.vy = random(-0.025, 0.025);
+        this.baseSize = random(1.1, 3.7);
         this.size = this.baseSize;
         this.hue = random(198, 214);
-        this.sat = random(38, 58);
-        this.bri = random(58, 88);
-        this.alpha = random(0.14, 0.28);
+        this.sat = random(36, 56);
+        this.bri = random(58, 86);
+        this.alpha = random(0.12, 0.24);
         this.glow = 0;
+        this.seed = random(1000);
       }
 
       update() {
-        const n = noise(this.x * 0.0018, this.y * 0.0018, frameCount * 0.003);
+        const nx = (this.x + cameraDriftX * 0.25) * 0.0015;
+        const ny = (this.y + cameraDriftY * 0.25) * 0.0015;
+        const n = noise(nx, ny, frameCount * 0.0025 + this.seed);
         const angle = n * TWO_PI * 2.0;
 
-        this.vx += cos(angle) * 0.003;
-        this.vy += sin(angle) * 0.002;
+        this.vx += cos(angle) * 0.0023;
+        this.vy += sin(angle) * 0.0018;
 
         if (pointerActive) {
           const dx = pointerX - this.x;
           const dy = pointerY - this.y;
           const d = sqrt(dx * dx + dy * dy);
 
-          if (d < 300) {
-            const nx = dx / max(d, 0.0001);
-            const ny = dy / max(d, 0.0001);
+          if (d < 220) {
+            const nxDir = dx / max(d, 0.0001);
+            const nyDir = dy / max(d, 0.0001);
+            const tangentX = -nyDir;
+            const tangentY = nxDir;
 
-            const farForce = map(d, 0, 300, 0.038, 0.003, true);
-            this.vx += nx * farForce;
-            this.vy += ny * farForce;
+            const pull = map(d, 0, 220, 0.016, 0.002, true);
+            const swirl = map(d, 0, 220, 0.007, 0.001, true);
 
-            if (d < 110) {
-              const nearForce = map(d, 0, 110, 0.056, 0.012, true);
-              this.vx += nx * nearForce;
-              this.vy += ny * nearForce;
-              this.vx *= 0.93;
-              this.vy *= 0.93;
-              this.size = lerp(this.size, this.baseSize * 1.32, 0.08);
-              this.alpha = lerp(this.alpha, 0.5, 0.06);
-              this.glow = lerp(this.glow, 1, 0.1);
-            } else {
-              this.size = lerp(this.size, this.baseSize * 1.08, 0.04);
-              this.alpha = lerp(this.alpha, 0.3, 0.03);
-              this.glow = lerp(this.glow, 0.35, 0.04);
+            this.vx += nxDir * pull;
+            this.vy += nyDir * pull;
+
+            // Keeps motion flowing around the pointer instead of collapsing into clumps.
+            this.vx += tangentX * swirl * sin(frameCount * 0.01 + this.seed);
+            this.vy += tangentY * swirl * sin(frameCount * 0.01 + this.seed);
+
+            if (d < 42) {
+              const repel = map(d, 0, 42, 0.04, 0.004, true);
+              this.vx -= nxDir * repel;
+              this.vy -= nyDir * repel;
             }
+
+            this.size = lerp(this.size, this.baseSize * 1.08, 0.04);
+            this.alpha = lerp(this.alpha, 0.28, 0.03);
+            this.glow = lerp(this.glow, 0.8, 0.05);
           } else {
             this.size = lerp(this.size, this.baseSize, 0.03);
-            this.alpha = lerp(this.alpha, 0.2, 0.02);
-            this.glow = lerp(this.glow, 0, 0.03);
+            this.alpha = lerp(this.alpha, 0.18, 0.02);
+            this.glow = lerp(this.glow, 0, 0.025);
           }
         } else {
           this.size = lerp(this.size, this.baseSize, 0.02);
-          this.alpha = lerp(this.alpha, 0.18, 0.02);
+          this.alpha = lerp(this.alpha, 0.16, 0.02);
           this.glow = lerp(this.glow, 0, 0.02);
         }
 
-        this.vx *= 0.985;
-        this.vy *= 0.985;
+        this.vx += cameraVelocityX() * 0.004;
+        this.vy += cameraVelocityY() * 0.004;
 
-        this.vx = constrain(this.vx, -0.32, 0.32);
-        this.vy = constrain(this.vy, -0.24, 0.24);
+        this.vx *= 0.984;
+        this.vy *= 0.984;
+
+        this.vx = constrain(this.vx, -0.16, 0.16);
+        this.vy = constrain(this.vy, -0.12, 0.12);
 
         this.x += this.vx;
         this.y += this.vy;
 
-        if (this.x < -10) this.x = width + 10;
-        if (this.x > width + 10) this.x = -10;
-        if (this.y < -10) this.y = height + 10;
-        if (this.y > height + 10) this.y = -10;
+        if (this.x < -12) this.x = width + 12;
+        if (this.x > width + 12) this.x = -12;
+        if (this.y < -12) this.y = height + 12;
+        if (this.y > height + 12) this.y = -12;
       }
 
       draw() {
         noStroke();
 
-        const glowBoost = this.glow * 0.18;
-        const brightnessBoost = this.glow * 18;
+        const glowBoost = this.glow * 0.14;
+        const brightBoost = this.glow * 14;
 
-        fill(this.hue, this.sat, min(100, this.bri + brightnessBoost * 0.25), (this.alpha + glowBoost) * 0.14);
-        circle(this.x, this.y, this.size * 4.0);
+        fill(this.hue, this.sat, min(100, this.bri + brightBoost * 0.25), (this.alpha + glowBoost) * 0.13);
+        circle(this.x, this.y, this.size * 3.6);
 
-        fill(this.hue, this.sat, min(100, this.bri + brightnessBoost * 0.45), (this.alpha + glowBoost) * 0.3);
-        circle(this.x, this.y, this.size * 2.1);
+        fill(this.hue, this.sat, min(100, this.bri + brightBoost * 0.4), (this.alpha + glowBoost) * 0.28);
+        circle(this.x, this.y, this.size * 1.95);
 
-        fill(this.hue, this.sat * 0.72, min(100, this.bri + brightnessBoost), this.alpha + glowBoost * 0.8);
+        fill(this.hue, this.sat * 0.74, min(100, this.bri + brightBoost), this.alpha + glowBoost * 0.7);
         circle(this.x, this.y, this.size);
       }
     }
@@ -211,23 +230,48 @@
         this.x = x;
         this.y = y;
         this.life = 1;
-        this.size = random(8, 18);
+        this.size = random(7, 16);
       }
 
       update() {
-        this.life -= 0.03;
-        this.size += 0.38;
+        this.life -= 0.028;
+        this.size += 0.28;
       }
 
       draw() {
         noFill();
-        stroke(205, 42, 78, this.life * 0.045);
+        stroke(205, 40, 78, this.life * 0.04);
         strokeWeight(1);
-        ellipse(this.x, this.y, this.size * 0.85, this.size * 1.2);
+        circle(this.x, this.y, this.size);
       }
 
       isDead() {
         return this.life <= 0;
+      }
+    }
+
+    class FarStar {
+      constructor(depth) {
+        this.baseX = random(width);
+        this.baseY = random(height);
+        this.depth = depth;
+        this.size = random(0.6, 1.8) * map(depth, 0.2, 1, 0.55, 1.2);
+        this.alpha = random(0.04, 0.16);
+        this.hue = random(205, 225);
+        this.seed = random(1000);
+      }
+
+      draw() {
+        const px = wrap(this.baseX - cameraDriftX * this.depth * 0.07, width);
+        const py = wrap(this.baseY - cameraDriftY * this.depth * 0.05, height);
+        const pulse = map(noise(this.seed, frameCount * 0.008), 0, 1, 0.8, 1.15);
+
+        noStroke();
+        fill(this.hue, 20, 100, this.alpha * 0.18);
+        circle(px, py, this.size * 3.2 * pulse);
+
+        fill(this.hue, 12, 100, this.alpha);
+        circle(px, py, this.size * pulse);
       }
     }
 
@@ -239,10 +283,16 @@
       verseDiv = select("#verse");
       hintDiv = select("#hint");
 
-      const particleCount = min(2600, floor((windowWidth * windowHeight) / 620));
+      const particleCount = min(2400, floor((windowWidth * windowHeight) / 720));
       for (let i = 0; i < particleCount; i++) {
         particles.push(new Particle());
       }
+
+      for (let i = 0; i < 220; i++) {
+        farStars.push(new FarStar(random(0.2, 1)));
+      }
+
+      createZones();
 
       pointerX = width * 0.5;
       pointerY = height * 0.58;
@@ -253,9 +303,11 @@
     }
 
     function draw() {
-      background(220, 70, 4, 0.22);
+      background(220, 70, 4, 0.19);
 
+      updateCameraDrift();
       drawBreathField();
+      drawFarStars();
       drawWakeTrail();
 
       for (const particle of particles) {
@@ -265,16 +317,45 @@
 
       drawDepthVeil();
       drawPointerHalo();
-      updatePresenceState();
-      updateScriptureSequence();
+      drawFinalLight();
+      updatePresence();
+      updateHint();
       updateSound();
+
+      if (!introShown && frameCount > 20) {
+        introShown = true;
+        showVerse("before speech, before form", 2200);
+      }
+    }
+
+    function createZones() {
+      zones = [
+        { x: 0.18, y: 0.26, r: 70, found: false, text: zoneTexts[0] },
+        { x: 0.72, y: 0.3, r: 78, found: false, text: zoneTexts[1] },
+        { x: 0.28, y: 0.68, r: 74, found: false, text: zoneTexts[2] },
+        { x: 0.62, y: 0.62, r: 82, found: false, text: zoneTexts[3] },
+        { x: 0.47, y: 0.46, r: 86, found: false, text: zoneTexts[4] }
+      ];
     }
 
     function drawBreathField() {
       noStroke();
-      const pulse = map(sin(frameCount * 0.014), -1, 1, 0.018, 0.045);
-      fill(215, 40, 8, pulse);
+
+      const pulse = map(sin(frameCount * 0.012), -1, 1, 0.014, 0.038);
+      fill(215, 38, 8, pulse);
       rect(0, 0, width, height);
+
+      const driftGlowX = width * 0.5 + sin(frameCount * 0.0019) * width * 0.18;
+      const driftGlowY = height * 0.52 + cos(frameCount * 0.0013) * height * 0.12;
+
+      fill(210, 30, 12, 0.018);
+      ellipse(driftGlowX, driftGlowY, width * 0.9, height * 0.65);
+    }
+
+    function drawFarStars() {
+      for (const star of farStars) {
+        star.draw();
+      }
     }
 
     function drawWakeTrail() {
@@ -290,92 +371,119 @@
 
     function drawDepthVeil() {
       noStroke();
-      fill(220, 40, 6, 0.045);
+      fill(220, 40, 6, 0.04);
       rect(0, 0, width, height);
 
       if (pointerActive) {
         for (let i = 0; i < 4; i++) {
-          const radius = 130 - i * 20;
-          fill(205, 44, 26, 0.013);
-          ellipse(pointerX, pointerY, radius * 1.05, radius * 1.5);
+          const radius = 92 - i * 16;
+          fill(205, 42, 26, 0.012);
+          circle(pointerX, pointerY, radius * 2);
         }
       }
     }
 
     function drawPointerHalo() {
-      if (!pointerActive) {
-        return;
-      }
+      if (!pointerActive) return;
 
       noStroke();
 
-      fill(202, 35, 90, 0.03);
-      ellipse(pointerX, pointerY, 72, 110);
+      fill(202, 34, 90, 0.024);
+      circle(pointerX, pointerY, 82);
 
-      fill(202, 30, 96, 0.06);
-      ellipse(pointerX, pointerY, 34, 52);
+      fill(202, 28, 96, 0.055);
+      circle(pointerX, pointerY, 38);
 
-      fill(202, 20, 100, 0.14);
-      ellipse(pointerX, pointerY, 12, 18);
+      fill(202, 18, 100, 0.13);
+      circle(pointerX, pointerY, 14);
     }
 
-    function updatePresenceState() {
-      if (!introShown && frameCount > 45) {
-        introShown = true;
-        showVerse("In the beginning", 3200);
-      }
+    function drawFinalLight() {
+      const x = width * finalLight.x + sin(frameCount * 0.0017) * 16;
+      const y = height * finalLight.y + cos(frameCount * 0.0011) * 10;
+      finalLight.pulse = map(sin(frameCount * 0.03), -1, 1, 0.9, 1.1);
 
+      noStroke();
+
+      const baseAlpha = finalLightUnlocked ? 0.34 : 0.14;
+      const sizeBoost = finalLightUnlocked ? 1.15 : 1;
+
+      fill(58, 18, 100, baseAlpha * 0.14);
+      circle(x, y, 120 * sizeBoost * finalLight.pulse);
+
+      fill(56, 20, 100, baseAlpha * 0.3);
+      circle(x, y, 48 * sizeBoost * finalLight.pulse);
+
+      fill(52, 16, 100, baseAlpha);
+      circle(x, y, 8 * sizeBoost * finalLight.pulse);
+    }
+
+    function updatePresence() {
       if (pointerActive) {
         const moved = dist(pointerX, pointerY, lastPointerX, lastPointerY);
-        movementSpeed = lerp(movementSpeed, moved, 0.25);
+        movementSpeed = lerp(movementSpeed, moved, 0.22);
 
-        if (moved < 4) {
-          totalHoverTime += 1;
-          pointerStillFrames += 1;
-        } else {
-          totalHoverTime = max(0, totalHoverTime - 0.12);
-          pointerStillFrames = 0;
-        }
-
-        if (frameCount % 4 === 0) {
+        if (moved > 1.2 && frameCount % 5 === 0) {
           wakes.push(new Wake(pointerX, pointerY));
         }
 
-        if (pointerStillFrames > 26 && frameCount % 14 === 0) {
-          wakes.push(new Wake(pointerX + random(-4, 4), pointerY + random(-4, 4)));
-        }
-
-        hintDiv.style("opacity", totalHoverTime > 120 ? "0" : "1");
+        checkZoneDiscovery();
       } else {
-        totalHoverTime = max(0, totalHoverTime - 0.3);
-        pointerStillFrames = 0;
-        movementSpeed = lerp(movementSpeed, 0, 0.1);
+        movementSpeed = lerp(movementSpeed, 0, 0.08);
       }
 
       lastPointerX = pointerX;
       lastPointerY = pointerY;
+    }
 
-      if (hoverTextCooldown > 0) {
-        hoverTextCooldown -= 1;
+    function checkZoneDiscovery() {
+      for (const zone of zones) {
+        if (zone.found) continue;
+
+        const zx = width * zone.x;
+        const zy = height * zone.y;
+        const d = dist(pointerX, pointerY, zx, zy);
+
+        if (d < zone.r) {
+          zone.found = true;
+          discoveredCount += 1;
+          showVerse(zone.text, 1800);
+
+          if (discoveredCount === zones.length) {
+            finalLightUnlocked = true;
+            showVerse("a light waits in the distance", 2200);
+          }
+        }
       }
     }
 
-    function updateScriptureSequence() {
-      if (wordIndex >= scriptureMoments.length - 1) {
+    function updateHint() {
+      if (finalLightActivated) {
+        hintDiv.html("In the beginning");
+        hintDiv.style("color", "rgba(210, 220, 255, 0.44)");
         return;
       }
 
-      const nextIndex = wordIndex + 1;
-      if (nextIndex < scriptureMoments.length && totalHoverTime >= scriptureMoments[nextIndex].trigger && hoverTextCooldown === 0) {
-        wordIndex = nextIndex;
-        showVerse(scriptureMoments[wordIndex].text, scriptureMoments[wordIndex].duration);
-        hoverTextCooldown = 110;
+      if (finalLightUnlocked) {
+        hintDiv.html("the distant light can now be touched");
+        hintDiv.style("color", "rgba(214, 210, 170, 0.4)");
+        return;
+      }
+
+      const remaining = zones.length - discoveredCount;
+
+      if (remaining === zones.length) {
+        hintDiv.html("move through the deep");
+      } else if (remaining > 0) {
+        hintDiv.html(`${remaining} hidden places remain`);
+      } else {
+        hintDiv.html("the distance is opening");
       }
     }
 
     function showVerse(text, duration) {
       verseDiv.html(text);
-      verseDiv.style("opacity", "0.88");
+      verseDiv.style("opacity", "0.9");
 
       clearTimeout(showVerse.fadeTimer);
       showVerse.fadeTimer = setTimeout(() => {
@@ -383,10 +491,28 @@
       }, duration);
     }
 
+    function updateCameraDrift() {
+      const t = millis() * 0.00005;
+      cameraDriftX = sin(t * 0.9) * 220 + sin(t * 2.1) * 90;
+      cameraDriftY = cos(t * 0.7) * 160 + sin(t * 1.7) * 60;
+    }
+
+    function cameraVelocityX() {
+      return cos(millis() * 0.000045) * 0.18;
+    }
+
+    function cameraVelocityY() {
+      return sin(millis() * 0.00004) * 0.14;
+    }
+
+    function wrap(value, maxValue) {
+      let v = value % maxValue;
+      if (v < 0) v += maxValue;
+      return v;
+    }
+
     function initAudio() {
-      if (audioStarted) {
-        return;
-      }
+      if (audioStarted) return;
 
       userStartAudio();
 
@@ -400,8 +526,8 @@
       windOsc.connect(windFilter);
       breathOsc.connect(windFilter);
 
-      windFilter.freq(700);
-      windFilter.res(3);
+      windFilter.freq(650);
+      windFilter.res(2.5);
 
       windOsc.amp(0);
       breathOsc.amp(0);
@@ -410,28 +536,23 @@
       breathOsc.start();
 
       audioStarted = true;
-      noiseEnvReady = true;
     }
 
     function updateSound() {
-      if (!noiseEnvReady) {
-        return;
-      }
+      if (!audioStarted) return;
 
-      const movementAmount = constrain(movementSpeed / 18, 0, 1);
-      const drift = map(noise(frameCount * 0.01), 0, 1, 110, 180);
-      const breath = map(sin(frameCount * 0.018), -1, 1, 58, 72);
-      const filterFreq = map(movementAmount, 0, 1, 420, 1400);
+      const movement = constrain(movementSpeed / 18, 0, 1);
+      const drift = map(noise(frameCount * 0.008), 0, 1, 102, 165);
+      const breath = map(sin(frameCount * 0.016), -1, 1, 56, 68);
 
-      windOsc.freq(drift + movementAmount * 36);
+      windOsc.freq(drift + movement * 24);
       breathOsc.freq(breath);
+      windFilter.freq(map(movement, 0, 1, 380, 1200));
 
-      windFilter.freq(filterFreq);
+      const windAmp = pointerActive ? map(movement, 0, 1, 0.003, 0.018) : 0.002;
+      const breathAmpValue = pointerActive ? map(movement, 0, 1, 0.008, 0.004) : 0.005;
 
-      const windAmp = pointerActive ? map(movementAmount, 0, 1, 0.004, 0.026) : 0;
-      const breathAmpValue = pointerActive ? map(movementAmount, 0, 1, 0.01, 0.004) : 0.006;
-
-      windOsc.amp(windAmp, 0.18);
+      windOsc.amp(windAmp, 0.2);
       breathOsc.amp(breathAmpValue, 0.24);
     }
 
@@ -440,6 +561,19 @@
       pointerY = constrain(y, 0, height);
       pointerActive = true;
       initAudio();
+    }
+
+    function tryActivateFinalLight(x, y) {
+      if (!finalLightUnlocked || finalLightActivated) return;
+
+      const fx = width * finalLight.x + sin(frameCount * 0.0017) * 16;
+      const fy = height * finalLight.y + cos(frameCount * 0.0011) * 10;
+      const d = dist(x, y, fx, fy);
+
+      if (d < 42) {
+        finalLightActivated = true;
+        showVerse("In the beginning", 3600);
+      }
     }
 
     function mouseMoved() {
@@ -451,8 +585,8 @@
     }
 
     function mousePressed() {
-      initAudio();
       setPointer(mouseX, mouseY);
+      tryActivateFinalLight(mouseX, mouseY);
     }
 
     function touchStarted() {
@@ -460,6 +594,7 @@
 
       if (touches.length > 0) {
         setPointer(touches[0].x, touches[0].y);
+        tryActivateFinalLight(touches[0].x, touches[0].y);
       }
 
       return false;
@@ -487,6 +622,7 @@
 
     function windowResized() {
       resizeCanvas(windowWidth, windowHeight);
+      createZones();
       background(220, 70, 4, 1);
     }
   </script>
