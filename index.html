@@ -12,21 +12,21 @@
       top: 50%;
       left: 50%;
       transform: translate(-50%, -50%);
-      color: rgba(180, 200, 255, 0.7);
-      font-size: 3.2rem;
-      letter-spacing: 3px;
+      color: rgba(160, 190, 255, 0.6);
+      font-size: 4rem;
+      letter-spacing: 6px;
       font-weight: 300;
       font-style: italic;
       text-align: center;
       pointer-events: none;
       opacity: 0;
-      transition: opacity 4s ease;
-      text-shadow: 0 0 30px rgba(80, 140, 255, 0.4);
-      max-width: 85%;
-      line-height: 1.35;
+      transition: opacity 6s ease;
+      text-shadow: 0 0 40px rgba(80, 120, 255, 0.3);
+      max-width: 90%;
+      line-height: 1.3;
     }
     @media (max-width: 600px) {
-      #verse { font-size: 2.4rem; }
+      #verse { font-size: 2.8rem; }
     }
   </style>
 </head>
@@ -35,33 +35,38 @@
 
 <script>
 // Rachaph — Hovering Presence
-// Deep darkness. Waters. Spirit hovers. No rush. Presence first.
+// Deep darkness. Waters. Spirit hovers before words.
+// Single Genesis words appear slowly after calm presence.
 
 let particles = [];
 let totalHoverTime = 0;
 let lastX = 0, lastY = 0;
-let wordIndex = -1;  // start before first word
+let wordIndex = -1;  // before first word
 
+// Single words from Genesis 1:1–3 (exact text, no full sentences)
 const genesisWords = [
-  "In the beginning God created the heavens and the earth.",
-  "The earth was without form and void, and darkness was over the face of the deep.",
-  "And the Spirit of God was hovering over the face of the waters.",
-  "And God said, 'Let there be light,' and there was light.",
-  "And God saw that the light was good.",
-  "And God separated the light from the darkness.",
-  "God called the light Day, and the darkness he called Night.",
-  "And there was evening and there was morning, the first day."
+  "beginning",
+  "created",
+  "heavens",
+  "earth",
+  "formless",
+  "void",
+  "darkness",
+  "deep",
+  "Spirit",
+  "hovering",
+  "waters"
 ];
 
 class Particle {
   constructor() {
     this.x = random(width);
     this.y = random(height);
-    this.vx = random(-0.4, 0.4);
-    this.vy = random(-0.4, 0.4);
-    this.size = random(2.5, 5.5);
+    this.vx = random(-0.3, 0.3);
+    this.vy = random(-0.3, 0.3);
+    this.size = random(2.8, 6);
     this.hue = random(190, 230);   // deep blues
-    this.alpha = 0.65;             // visible from start
+    this.alpha = 0.7;              // visible
   }
 
   update() {
@@ -75,23 +80,25 @@ class Particle {
 
   attractTo(mx, my) {
     let d = dist(this.x, this.y, mx, my);
-    if (d < 380) {  // large magnet radius
-      let pull = map(d, 0, 380, 0.12, 0.004);  // strong near, gentle far
+    if (d < 420) {  // large gentle pull radius
+      let pull = map(d, 0, 420, 0.09, 0.003);  // strong near, soft far
       let angle = atan2(my - this.y, mx - this.x);
       this.vx += cos(angle) * pull;
       this.vy += sin(angle) * pull;
 
-      // warmth/glow when pulled
-      if (d < 120) {
-        this.hue = lerp(this.hue, 200, 0.04);
-        this.alpha = lerp(this.alpha, 0.95, 0.03);
+      // calm & gather when close
+      if (d < 140) {
+        this.vx *= 0.96;
+        this.vy *= 0.96;
+        this.hue = lerp(this.hue, 200, 0.03);
+        this.alpha = lerp(this.alpha, 0.95, 0.02);
       }
     }
   }
 
   draw() {
     noStroke();
-    fill(this.hue, 70, 75, this.alpha);
+    fill(this.hue, 65, 75, this.alpha);
     circle(this.x, this.y, this.size);
   }
 }
@@ -100,7 +107,7 @@ function setup() {
   createCanvas(windowWidth, windowHeight);
   colorMode(HSB, 360, 100, 100, 1);
 
-  for (let i = 0; i < 1000; i++) {
+  for (let i = 0; i < 1100; i++) {
     particles.push(new Particle());
   }
 
@@ -108,51 +115,43 @@ function setup() {
 }
 
 function draw() {
-  background(220, 85, 4, 0.035);  // deep dark blue fade — keeps darkness
+  background(220, 90, 3, 0.03);  // very slow deep blue fade — stays dark
 
   for (let p of particles) {
     p.update();
-    if (mouseIsPressed || touches.length > 0) {  // mobile touch support
-      let mx = mouseX || touches[0]?.x || width/2;
-      let my = mouseY || touches[0]?.y || height/2;
-      p.attractTo(mx, my);
-    }
+    p.attractTo(mouseX, mouseY);  // always magnet to cursor/finger
     p.draw();
   }
 
-  // Hover time accumulation (works on desktop & mobile)
-  let hovered = false;
-  if (mouseIsPressed || touches.length > 0) {
-    hovered = true;
-    totalHoverTime++;
-  } else if (dist(mouseX, mouseY, lastX, lastY) < 15) {
-    hovered = true;
+  // Hover time: calm & steady = progress
+  let moved = dist(mouseX, mouseY, lastX, lastY);
+  if (moved < 12) {
     totalHoverTime++;
   } else {
-    totalHoverTime = max(0, totalHoverTime - 1.2);
+    totalHoverTime = max(0, totalHoverTime - 1);  // slow decay
   }
   lastX = mouseX; lastY = mouseY;
 
-  // Genesis words appear in sequence after sustained hovering
-  if (totalHoverTime > 120 && wordIndex < genesisWords.length - 1) {
-    if (frameCount % 400 === 0) {  // ~7 seconds per word at 60fps
+  // Genesis words appear one at a time after long calm hovering
+  if (totalHoverTime > 180 && wordIndex < genesisWords.length - 1) {
+    if (frameCount % 600 === 0) {  // ~10 seconds per word
       wordIndex++;
       let word = genesisWords[wordIndex];
       verseDiv.html(word);
-      verseDiv.style('opacity', 0.75);
+      verseDiv.style('opacity', 0.8);
       setTimeout(() => {
         verseDiv.style('opacity', 0);
-      }, 9000);  // fade after 9 seconds
+      }, 12000);  // stay visible 12 seconds
     }
   }
 
   // Persistent faint stars where you hovered longest
-  if (totalHoverTime > 180) {
-    fill(60, 40, 100, 0.6);
-    for (let i = 0; i < 5; i++) {
-      let sx = mouseX + random(-120, 120);
-      let sy = mouseY + random(-120, 120);
-      circle(sx, sy, 1.6);
+  if (totalHoverTime > 220) {
+    fill(60, 40, 100, 0.5);
+    for (let i = 0; i < 4; i++) {
+      let sx = mouseX + random(-90, 90);
+      let sy = mouseY + random(-90, 90);
+      circle(sx, sy, 1.4);
     }
   }
 }
