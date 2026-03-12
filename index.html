@@ -2,9 +2,8 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8">
-  <title>Rachaph — Hovering Presence</title>
+  <title>Rachaph — Hovering</title>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/p5.js/1.9.4/p5.min.js"></script>
-  <script src="https://cdnjs.cloudflare.com/ajax/libs/p5.js/1.9.4/addons/p5.sound.min.js"></script>
   <style>
     body { margin:0; padding:0; overflow:hidden; background:#00040f; }
     canvas { display:block; }
@@ -13,21 +12,18 @@
       top: 50%;
       left: 50%;
       transform: translate(-50%, -50%);
-      color: rgba(140, 180, 255, 0.55);
+      color: rgba(140, 180, 255, 0.6);
       font-size: 4.5rem;
-      letter-spacing: 6px;
+      letter-spacing: 5px;
       font-weight: 300;
       font-style: italic;
       text-align: center;
       pointer-events: none;
       opacity: 0;
       transition: opacity 8s ease;
-      text-shadow: 0 0 50px rgba(60, 100, 255, 0.25);
+      text-shadow: 0 0 40px rgba(60, 100, 255, 0.3);
       max-width: 90%;
       line-height: 1.3;
-    }
-    @media (max-width: 600px) {
-      #verse { font-size: 3.2rem; }
     }
   </style>
 </head>
@@ -35,15 +31,10 @@
 <div id="verse"></div>
 
 <script>
-// Rachaph — Hovering Presence
-// The original soothing particles: gentle droplets in the void.
-// Hovering before words. Deep darkness. No light yet.
-
 let particles = [];
 let totalHoverTime = 0;
 let lastX = 0, lastY = 0;
 let wordIndex = -1;
-let windSound, breathSound;
 
 const genesisWords = [
   "In the beginning",
@@ -66,8 +57,8 @@ class Particle {
     this.y = random(height);
     this.vx = random(-0.18, 0.18);
     this.vy = random(-0.18, 0.18);
-    this.size = random(3, 8);      // soft droplet size
-    this.hue = random(190, 235);   // deep midnight blues
+    this.size = random(3, 8);
+    this.hue = random(190, 235);
     this.alpha = 0.68;
   }
 
@@ -82,18 +73,18 @@ class Particle {
 
   attractTo(mx, my) {
     let d = dist(this.x, this.y, mx, my);
-    if (d < 480) {  // wide, gentle pull
+    if (d < 480) {
       let pull = map(d, 0, 480, 0.085, 0.0015);
       let angle = atan2(my - this.y, mx - this.x);
       this.vx += cos(angle) * pull;
       this.vy += sin(angle) * pull;
 
       if (d < 180) {
-        this.vx *= 0.93;   // calm/slow
+        this.vx *= 0.93;
         this.vy *= 0.93;
         this.hue = lerp(this.hue, 210, 0.015);
         this.alpha = lerp(this.alpha, 0.9, 0.01);
-        this.size = lerp(this.size, 6.5, 0.015);  // gentle swell
+        this.size = lerp(this.size, 6.5, 0.015);
       }
     }
   }
@@ -105,12 +96,6 @@ class Particle {
   }
 }
 
-function preload() {
-  // Optional ambient sounds (comment out if you want total silence)
-  windSound = loadSound('https://assets.codepen.io/243235/wind-ocean-low.mp3');  // soft wind/water
-  breathSound = loadSound('https://assets.codepen.io/243235/breath-soft-low.mp3'); // faint breathing
-}
-
 function setup() {
   createCanvas(windowWidth, windowHeight);
   colorMode(HSB, 360, 100, 100, 1);
@@ -120,20 +105,10 @@ function setup() {
   }
 
   verseDiv = select('#verse');
-
-  // Start ambient sounds quietly (loop, low volume)
-  if (windSound) {
-    windSound.loop();
-    windSound.setVolume(0.08);
-  }
-  if (breathSound) {
-    breathSound.loop();
-    breathSound.setVolume(0.04);
-  }
 }
 
 function draw() {
-  background(220, 95, 2, 0.018);  // ultra-slow deep blue/black fade — pure void
+  background(220, 95, 2, 0.018);
 
   for (let p of particles) {
     p.update();
@@ -141,29 +116,26 @@ function draw() {
     p.draw();
   }
 
-  // Hover accumulation
   let moved = dist(mouseX, mouseY, lastX, lastY);
   if (moved < 9) {
     totalHoverTime++;
   } else {
-    totalHoverTime = max(0, totalHoverTime - 0.6);  // very slow decay
+    totalHoverTime = max(0, totalHoverTime - 0.6);
   }
   lastX = mouseX; lastY = mouseY;
 
-  // Genesis words — single, slow, after calm hovering
   if (totalHoverTime > 220 && wordIndex < genesisWords.length - 1) {
-    if (frameCount % 900 === 0) {  // ~15 seconds per word
+    if (frameCount % 900 === 0) {
       wordIndex++;
       let word = genesisWords[wordIndex];
       verseDiv.html(word);
       verseDiv.style('opacity', 0.72);
       setTimeout(() => {
         verseDiv.style('opacity', 0);
-      }, 16000);  // stay visible 16 seconds
+      }, 16000);
     }
   }
 
-  // Persistent faint stars/trails where you hovered longest
   if (totalHoverTime > 280) {
     fill(60, 50, 100, 0.4);
     for (let i = 0; i < 4; i++) {
