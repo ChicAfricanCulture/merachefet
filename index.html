@@ -51,47 +51,35 @@ const genesisWords = [
   "waters"
 ];
 
+let particles = [];
+let hoverTime = 0;        // how long mouse/finger has stayed still
+let lastMouseX = 0;
+let lastMouseY = 0;
+
 class Particle {
   constructor() {
     this.x = random(width);
     this.y = random(height);
-    this.vx = random(-0.18, 0.18);
-    this.vy = random(-0.18, 0.18);
-    this.size = random(3, 8);
-    this.hue = random(190, 235);
-    this.alpha = 0.68;
+    this.vx = random(-0.8, 0.8);
+    this.vy = random(-0.8, 0.8);
+    this.size = random(2, 5);
+    this.hue = random(190, 240);   // deep ocean / void colors
   }
-
+  
   update() {
     this.x += this.vx;
     this.y += this.vy;
+    
+    // gentle wrap-around (feels endless)
     if (this.x < 0) this.x = width;
     if (this.x > width) this.x = 0;
     if (this.y < 0) this.y = height;
     if (this.y > height) this.y = 0;
   }
-
-  attractTo(mx, my) {
-    let d = dist(this.x, this.y, mx, my);
-    if (d < 480) {
-      let pull = map(d, 0, 480, 0.085, 0.0015);
-      let angle = atan2(my - this.y, mx - this.x);
-      this.vx += cos(angle) * pull;
-      this.vy += sin(angle) * pull;
-
-      if (d < 180) {
-        this.vx *= 0.93;
-        this.vy *= 0.93;
-        this.hue = lerp(this.hue, 210, 0.015);
-        this.alpha = lerp(this.alpha, 0.9, 0.01);
-        this.size = lerp(this.size, 6.5, 0.015);
-      }
-    }
-  }
-
+  
   draw() {
     noStroke();
-    fill(this.hue, 68, 72, this.alpha);
+    fill(this.hue, 30, 90, 0.6);
     circle(this.x, this.y, this.size);
   }
 }
@@ -99,49 +87,61 @@ class Particle {
 function setup() {
   createCanvas(windowWidth, windowHeight);
   colorMode(HSB, 360, 100, 100, 1);
-
-  for (let i = 0; i < 1400; i++) {
+  
+  // create initial chaos
+  for (let i = 0; i < 800; i++) {
     particles.push(new Particle());
   }
-
-  verseDiv = select('#verse');
 }
 
 function draw() {
-  background(220, 95, 2, 0.018);
-
+  background(220, 40, 8, 0.07);   // very slow fade — feels like deep water
+  
+  // update & draw particles
   for (let p of particles) {
     p.update();
-    p.attractTo(mouseX, mouseY);
     p.draw();
   }
-
-  let moved = dist(mouseX, mouseY, lastX, lastY);
-  if (moved < 9) {
-    totalHoverTime++;
+  
+  // HOVER DETECTION
+  let distMoved = dist(mouseX, mouseY, lastMouseX, lastMouseY);
+  
+  if (distMoved < 8) {                 // mouse/finger is almost still
+    hoverTime++;
   } else {
-    totalHoverTime = max(0, totalHoverTime - 0.6);
+    hoverTime = 0;
   }
-  lastX = mouseX; lastY = mouseY;
-
-  if (totalHoverTime > 220 && wordIndex < genesisWords.length - 1) {
-    if (frameCount % 900 === 0) {
-      wordIndex++;
-      let word = genesisWords[wordIndex];
-      verseDiv.html(word);
-      verseDiv.style('opacity', 0.72);
-      setTimeout(() => {
-        verseDiv.style('opacity', 0);
-      }, 16000);
+  
+  lastMouseX = mouseX;
+  lastMouseY = mouseY;
+  
+  // If hovering steadily, particles near cursor begin to calm and gather
+  if (hoverTime > 25) {
+    for (let p of particles) {
+      let d = dist(p.x, p.y, mouseX, mouseY);
+      if (d < 180) {                    // radius of influence
+        // gently pull toward cursor + slow down
+        p.vx = lerp(p.vx, (mouseX - p.x) * 0.008, 0.08);
+        p.vy = lerp(p.vy, (mouseY - p.y) * 0.008, 0.08);
+        
+        // calm chaotic movement over time
+        p.vx *= 0.96;
+        p.vy *= 0.96;
+        
+        // visual feedback — particles brighten when forming
+        p.hue = lerp(p.hue, 140, 0.02);   // shift toward soft green (life emerging)
+      }
     }
   }
-
-  if (totalHoverTime > 280) {
-    fill(60, 50, 100, 0.4);
-    for (let i = 0; i < 4; i++) {
-      let sx = mouseX + random(-100, 100);
-      let sy = mouseY + random(-100, 100);
-      circle(sx, sy, 1.4);
+  
+  // very light repel if moving too fast (chaos returns)
+  if (hoverTime < 5 && distMoved > 30) {
+    for (let p of particles) {
+      let d = dist(p.x, p.y, mouseX, mouseY);
+      if (d < 120) {
+        p.vx += (p.x - mouseX) * 0.015;
+        p.vy += (p.y - mouseY) * 0.015;
+      }
     }
   }
 }
