@@ -144,8 +144,7 @@ function setup() {
 
 function draw() {
   // Deep blue background - very slow fade keeps dots as dots
-  // Lower alpha = longer trails. Higher alpha = cleaner dots.
-  // 0.02-0.03 is sweet spot for smooth movement without lines
+  // This creates the soothing trails without fireworks
   background(220, 85, 2, 0.022);
   
   // Track mouse for hover time
