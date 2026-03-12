@@ -24,6 +24,7 @@
       text-shadow: 0 0 45px rgba(80, 120, 255, 0.35);
       max-width: 90%;
       line-height: 1.3;
+      font-family: "Georgia", "Times New Roman", serif;
     }
     @media (max-width: 600px) {
       #verse { font-size: 3rem; }
@@ -42,64 +43,89 @@ let particles = [];
 let totalHoverTime = 0;
 let lastX = 0, lastY = 0;
 let wordIndex = -1;
+let verseDiv;
 
-// Single words from Genesis 1:1–3
+// Single words from Genesis — deep and quiet
 const genesisWords = [
-  "beginning",
-  "created",
-  "heavens",
-  "earth",
-  "formless",
-  "void",
-  "darkness",
   "deep",
-  "Spirit",
-  "hovering",
-  "waters"
+  "waters",
+  "darkness",
+  "hover",
+  "spirit",
+  "void",
+  "presence",
+  "be still",
+  "i am here",
+  "the deep remembers",
+  "let there be light"
 ];
 
 class Particle {
   constructor() {
     this.x = random(width);
     this.y = random(height);
-    this.vx = random(-0.25, 0.25);
-    this.vy = random(-0.25, 0.25);
-    this.size = random(3, 7);      // droplet-like
-    this.hue = random(190, 230);   // deep blues
-    this.alpha = 0.75;             // visible
+    this.vx = random(-0.2, 0.2);
+    this.vy = random(-0.2, 0.2);
+    this.size = random(2.5, 5.5);      // droplet-like
+    this.baseHue = random(190, 225);   // deep blues only
+    this.hue = this.baseHue;
+    this.alpha = random(0.5, 0.85);     // visible but soft
   }
 
   update() {
     this.x += this.vx;
     this.y += this.vy;
+    
+    // wrap around edges gently
     if (this.x < 0) this.x = width;
     if (this.x > width) this.x = 0;
     if (this.y < 0) this.y = height;
     if (this.y > height) this.y = 0;
+    
+    // very slow return to base hue
+    this.hue = lerp(this.hue, this.baseHue, 0.003);
   }
 
   attractTo(mx, my) {
+    if (mx < 0 || mx > width || my < 0 || my > height) return;
+    
     let d = dist(this.x, this.y, mx, my);
-    if (d < 450) {  // wide gentle pull
-      let pull = map(d, 0, 450, 0.10, 0.002);  // strong near, soft far
+    if (d < 400) {  // wide gentle pull
+      // magnetic pull - stronger when closer
+      let pull = map(d, 0, 400, 0.08, 0.001);
       let angle = atan2(my - this.y, mx - this.x);
       this.vx += cos(angle) * pull;
       this.vy += sin(angle) * pull;
 
       // calm & gather when close (stay round droplets)
-      if (d < 160) {
-        this.vx *= 0.94;   // slow down
-        this.vy *= 0.94;
-        this.hue = lerp(this.hue, 205, 0.025);
-        this.alpha = lerp(this.alpha, 0.92, 0.015);
-        this.size = lerp(this.size, 5.5, 0.02);  // slight swell like droplets merging
+      if (d < 150) {
+        // slow down to prevent streaking
+        this.vx *= 0.96;
+        this.vy *= 0.96;
+        
+        // warm slightly but stay blue
+        this.hue = lerp(this.hue, 205, 0.01);
+        this.alpha = lerp(this.alpha, 0.9, 0.01);
+        
+        // gentle swell like droplets merging
+        if (d < 60) {
+          this.size = lerp(this.size, 6.0, 0.01);
+        } else {
+          this.size = lerp(this.size, 4.0, 0.005);
+        }
       }
+      
+      // speed limit - prevents streaking
+      this.vx = constrain(this.vx, -0.8, 0.8);
+      this.vy = constrain(this.vy, -0.8, 0.8);
     }
   }
 
   draw() {
     noStroke();
-    fill(this.hue, 70, 78, this.alpha);
+    colorMode(HSB, 360, 100, 100, 1);
+    // pure blue tones only
+    fill(this.hue, 70, 85, this.alpha);
     circle(this.x, this.y, this.size);
   }
 }
@@ -108,7 +134,8 @@ function setup() {
   createCanvas(windowWidth, windowHeight);
   colorMode(HSB, 360, 100, 100, 1);
 
-  for (let i = 0; i < 1200; i++) {
+  // Create lots of particles - pure dots
+  for (let i = 0; i < 1000; i++) {
     particles.push(new Particle());
   }
 
@@ -116,45 +143,71 @@ function setup() {
 }
 
 function draw() {
-  background(220, 92, 2.5, 0.025);  // ultra-slow deep blue — stays dark
+  // Deep blue background - very slow fade keeps dots as dots
+  // 0.022 is sweet spot for smooth movement without lines
+  background(220, 85, 2, 0.022);
+  
+  // Track mouse for hover time
+  let mouseIsMoving = dist(mouseX, mouseY, lastX, lastY) > 3;
+  
+  if (mouseIsMoving) {
+    totalHoverTime = max(0, totalHoverTime - 0.5);
+  } else {
+    // Only count hover time when mouse is still and on screen
+    if (mouseX > 0 && mouseX < width && mouseY > 0 && mouseY < height) {
+      totalHoverTime += 0.3;
+    }
+  }
+  totalHoverTime = constrain(totalHoverTime, 0, 800);
+  lastX = mouseX; lastY = mouseY;
 
+  // Update and draw all particles
   for (let p of particles) {
     p.update();
     p.attractTo(mouseX, mouseY);
     p.draw();
   }
 
-  // Hover accumulation
-  let moved = dist(mouseX, mouseY, lastX, lastY);
-  if (moved < 10) {
-    totalHoverTime++;
-  } else {
-    totalHoverTime = max(0, totalHoverTime - 0.8);  // very slow decay
-  }
-  lastX = mouseX; lastY = mouseY;
-
-  // Genesis single words — appear slowly after calm hovering
-  if (totalHoverTime > 200 && wordIndex < genesisWords.length - 1) {
-    if (frameCount % 720 === 0) {  // ~12 seconds per word
-      wordIndex++;
-      let word = genesisWords[wordIndex];
-      verseDiv.html(word);
-      verseDiv.style('opacity', 0.75);
-      setTimeout(() => {
-        verseDiv.style('opacity', 0);
-      }, 14000);  // stay visible 14 seconds
+  // Word logic - appears in center based on hover time
+  if (totalHoverTime > 80 && wordIndex < genesisWords.length - 1) {
+    // First word appears after ~30 seconds of cumulative hover
+    if (wordIndex === -1 && totalHoverTime > 120) {
+      wordIndex = 0;
+      showWord(genesisWords[wordIndex]);
+    } 
+    // Subsequent words every ~45 seconds of hover
+    else if (wordIndex >= 0 && totalHoverTime > 180 + (wordIndex * 150)) {
+      if (wordIndex + 1 < genesisWords.length) {
+        wordIndex++;
+        showWord(genesisWords[wordIndex]);
+      }
     }
   }
-
-  // Persistent faint stars/trails where you hovered longest
-  if (totalHoverTime > 250) {
-    fill(60, 45, 100, 0.45);
-    for (let i = 0; i < 5; i++) {
-      let sx = mouseX + random(-110, 110);
-      let sy = mouseY + random(-110, 110);
-      circle(sx, sy, 1.5);
+  
+  // Memory stars - very faint, stays blue
+  if (totalHoverTime > 200) {
+    push();
+    colorMode(HSB, 360, 100, 100, 1);
+    noStroke();
+    for (let i = 0; i < 4; i++) {
+      let sx = mouseX + random(-120, 120);
+      let sy = mouseY + random(-120, 120);
+      // Blue-white, not yellow
+      fill(200, 40, 95, 0.3);
+      circle(sx, sy, 1.2);
     }
+    pop();
   }
+}
+
+function showWord(word) {
+  verseDiv.html(word);
+  verseDiv.style('opacity', 0.9);
+  
+  // Fade out after several seconds
+  setTimeout(() => {
+    verseDiv.style('opacity', 0);
+  }, 8000);
 }
 
 function windowResized() {
