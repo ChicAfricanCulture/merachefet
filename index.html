@@ -20,70 +20,91 @@
 
     #verse {
       position: absolute;
-      top: 50%;
+      top: 16%;
       left: 50%;
-      transform: translate(-50%, -50%);
-      color: rgba(120, 170, 255, 0.38);
-      font-size: 4.4rem;
-      letter-spacing: 0.18em;
+      transform: translateX(-50%);
+      color: rgba(145, 185, 255, 0.5);
+      font-size: 2.8rem;
+      letter-spacing: 0.12em;
       font-weight: 300;
       font-style: italic;
       text-align: center;
       pointer-events: none;
       opacity: 0;
-      transition: opacity 6s ease;
-      text-shadow: 0 0 24px rgba(70, 120, 255, 0.16);
+      transition: opacity 2.8s ease;
+      text-shadow: 0 0 18px rgba(70, 120, 255, 0.18);
       max-width: 90%;
       line-height: 1.3;
-      white-space: nowrap;
       z-index: 2;
+    }
+
+    #hint {
+      position: absolute;
+      bottom: 8%;
+      left: 50%;
+      transform: translateX(-50%);
+      color: rgba(170, 195, 255, 0.22);
+      font-size: 1rem;
+      letter-spacing: 0.08em;
+      text-align: center;
+      pointer-events: none;
+      opacity: 1;
+      transition: opacity 2s ease;
+      z-index: 2;
+      white-space: nowrap;
     }
 
     @media (max-width: 900px) {
       #verse {
-        font-size: 3rem;
-        letter-spacing: 0.12em;
+        font-size: 2.2rem;
       }
     }
 
     @media (max-width: 600px) {
       #verse {
-        font-size: 2.2rem;
-        letter-spacing: 0.08em;
+        font-size: 1.7rem;
+        top: 12%;
+        letter-spacing: 0.06em;
+      }
+
+      #hint {
+        font-size: 0.9rem;
+        bottom: 7%;
         white-space: normal;
+        width: 90%;
       }
     }
   </style>
 </head>
 <body>
   <div id="verse"></div>
+  <div id="hint">move slowly through the deep</div>
 
   <script>
     let particles = [];
+    let wakes = [];
     let verseDiv;
+    let hintDiv;
 
     let totalHoverTime = 0;
+    let pointerStillFrames = 0;
     let lastPointerX = 0;
     let lastPointerY = 0;
-    let wordIndex = -1;
 
-    let targetX = 0;
-    let targetY = 0;
+    let pointerX = 0;
+    let pointerY = 0;
     let pointerActive = false;
 
-    const genesisWords = [
-      "In the beginning",
-      "God",
-      "created",
-      "heavens",
-      "earth",
-      "formless",
-      "void",
-      "darkness",
-      "deep",
-      "Spirit",
-      "hovering",
-      "waters"
+    let wordIndex = -1;
+    let introShown = false;
+    let introFadeScheduled = false;
+    let hoverTextCooldown = 0;
+
+    const scriptureMoments = [
+      { text: "In the beginning", trigger: 360 },
+      { text: "darkness over the deep", trigger: 900 },
+      { text: "hovering over the waters", trigger: 1500 },
+      { text: "Let there be light", trigger: 2200 }
     ];
 
     class Particle {
@@ -92,12 +113,13 @@
         this.y = random(height);
         this.vx = random(-0.05, 0.05);
         this.vy = random(-0.03, 0.03);
-        this.baseSize = random(1.2, 4.5);
+        this.baseSize = random(1.2, 4.2);
         this.size = this.baseSize;
         this.hue = random(198, 214);
-        this.sat = random(38, 60);
-        this.bri = random(65, 92);
-        this.alpha = random(0.15, 0.34);
+        this.sat = random(38, 58);
+        this.bri = random(58, 88);
+        this.alpha = random(0.14, 0.28);
+        this.glow = 0;
       }
 
       update() {
@@ -108,41 +130,48 @@
         this.vy += sin(angle) * 0.002;
 
         if (pointerActive) {
-          const dx = targetX - this.x;
-          const dy = targetY - this.y;
+          const dx = pointerX - this.x;
+          const dy = pointerY - this.y;
           const d = sqrt(dx * dx + dy * dy);
 
-          if (d < 320) {
-            const force = map(d, 0, 320, 0.028, 0.0015, true);
+          if (d < 360) {
             const nx = dx / max(d, 0.0001);
             const ny = dy / max(d, 0.0001);
 
-            this.vx += nx * force;
-            this.vy += ny * force;
+            const farForce = map(d, 0, 360, 0.036, 0.002, true);
+            this.vx += nx * farForce;
+            this.vy += ny * farForce;
 
-            if (d < 140) {
-              this.vx *= 0.94;
-              this.vy *= 0.94;
-              this.size = lerp(this.size, this.baseSize * 1.22, 0.05);
-              this.alpha = lerp(this.alpha, 0.42, 0.04);
+            if (d < 130) {
+              const nearForce = map(d, 0, 130, 0.05, 0.01, true);
+              this.vx += nx * nearForce;
+              this.vy += ny * nearForce;
+              this.vx *= 0.93;
+              this.vy *= 0.93;
+              this.size = lerp(this.size, this.baseSize * 1.35, 0.08);
+              this.alpha = lerp(this.alpha, 0.48, 0.06);
+              this.glow = lerp(this.glow, 1, 0.1);
             } else {
-              this.size = lerp(this.size, this.baseSize * 1.05, 0.03);
-              this.alpha = lerp(this.alpha, 0.3, 0.025);
+              this.size = lerp(this.size, this.baseSize * 1.08, 0.04);
+              this.alpha = lerp(this.alpha, 0.28, 0.03);
+              this.glow = lerp(this.glow, 0.35, 0.04);
             }
           } else {
             this.size = lerp(this.size, this.baseSize, 0.03);
-            this.alpha = lerp(this.alpha, 0.22, 0.02);
+            this.alpha = lerp(this.alpha, 0.2, 0.02);
+            this.glow = lerp(this.glow, 0, 0.03);
           }
         } else {
           this.size = lerp(this.size, this.baseSize, 0.02);
-          this.alpha = lerp(this.alpha, 0.22, 0.02);
+          this.alpha = lerp(this.alpha, 0.18, 0.02);
+          this.glow = lerp(this.glow, 0, 0.02);
         }
 
         this.vx *= 0.985;
         this.vy *= 0.985;
 
-        this.vx = constrain(this.vx, -0.2, 0.2);
-        this.vy = constrain(this.vy, -0.16, 0.16);
+        this.vx = constrain(this.vx, -0.32, 0.32);
+        this.vy = constrain(this.vy, -0.24, 0.24);
 
         this.x += this.vx;
         this.y += this.vy;
@@ -156,14 +185,42 @@
       draw() {
         noStroke();
 
-        fill(this.hue, this.sat, this.bri, this.alpha * 0.16);
-        circle(this.x, this.y, this.size * 3.0);
+        const glowBoost = this.glow * 0.18;
+        const brightnessBoost = this.glow * 18;
 
-        fill(this.hue, this.sat, this.bri, this.alpha * 0.36);
-        circle(this.x, this.y, this.size * 1.8);
+        fill(this.hue, this.sat, min(100, this.bri + brightnessBoost * 0.25), (this.alpha + glowBoost) * 0.14);
+        circle(this.x, this.y, this.size * 4.2);
 
-        fill(this.hue, this.sat * 0.75, min(100, this.bri + 8), this.alpha);
+        fill(this.hue, this.sat, min(100, this.bri + brightnessBoost * 0.45), (this.alpha + glowBoost) * 0.3);
+        circle(this.x, this.y, this.size * 2.2);
+
+        fill(this.hue, this.sat * 0.72, min(100, this.bri + brightnessBoost), this.alpha + glowBoost * 0.8);
         circle(this.x, this.y, this.size);
+      }
+    }
+
+    class Wake {
+      constructor(x, y) {
+        this.x = x;
+        this.y = y;
+        this.life = 1;
+        this.size = random(12, 28);
+      }
+
+      update() {
+        this.life -= 0.025;
+        this.size += 0.45;
+      }
+
+      draw() {
+        noFill();
+        stroke(205, 42, 78, this.life * 0.06);
+        strokeWeight(1.2);
+        circle(this.x, this.y, this.size);
+      }
+
+      isDead() {
+        return this.life <= 0;
       }
     }
 
@@ -173,22 +230,26 @@
       pixelDensity(1);
 
       verseDiv = select("#verse");
+      hintDiv = select("#hint");
 
-      const particleCount = min(2200, floor((windowWidth * windowHeight) / 700));
+      const particleCount = min(2600, floor((windowWidth * windowHeight) / 620));
       for (let i = 0; i < particleCount; i++) {
         particles.push(new Particle());
       }
 
-      targetX = width * 0.5;
-      targetY = height * 0.5;
-      lastPointerX = targetX;
-      lastPointerY = targetY;
+      pointerX = width * 0.5;
+      pointerY = height * 0.58;
+      lastPointerX = pointerX;
+      lastPointerY = pointerY;
 
       background(220, 70, 4, 1);
     }
 
     function draw() {
-      background(220, 70, 4, 0.24);
+      background(220, 70, 4, 0.22);
+
+      drawBreathField();
+      drawWakeTrail();
 
       for (const particle of particles) {
         particle.update();
@@ -196,53 +257,130 @@
       }
 
       drawDepthVeil();
+      drawPointerHalo();
+      updatePresenceState();
+      updateScriptureSequence();
+    }
 
-      if (pointerActive) {
-        const moved = dist(targetX, targetY, lastPointerX, lastPointerY);
+    function drawBreathField() {
+      noStroke();
 
-        if (moved < 6) {
-          totalHoverTime += 1;
-        } else {
-          totalHoverTime = max(0, totalHoverTime - 0.35);
-        }
+      const pulse = map(sin(frameCount * 0.01), -1, 1, 0.02, 0.05);
+      fill(215, 40, 8, pulse);
+      rect(0, 0, width, height);
+    }
 
-        lastPointerX = targetX;
-        lastPointerY = targetY;
-      } else {
-        totalHoverTime = max(0, totalHoverTime - 0.5);
-      }
+    function drawWakeTrail() {
+      for (let i = wakes.length - 1; i >= 0; i--) {
+        wakes[i].update();
+        wakes[i].draw();
 
-      if (totalHoverTime > 160 && wordIndex < genesisWords.length - 1) {
-        if (frameCount % 600 === 0) {
-          wordIndex += 1;
-          verseDiv.html(genesisWords[wordIndex]);
-          verseDiv.style("opacity", "0.72");
-
-          setTimeout(() => {
-            verseDiv.style("opacity", "0");
-          }, 9000);
+        if (wakes[i].isDead()) {
+          wakes.splice(i, 1);
         }
       }
     }
 
     function drawDepthVeil() {
       noStroke();
-      fill(220, 40, 6, 0.05);
+      fill(220, 40, 6, 0.045);
       rect(0, 0, width, height);
 
       if (pointerActive) {
-        const r = 180;
         for (let i = 0; i < 5; i++) {
-          const radius = r - i * 28;
-          fill(205, 40, 28, 0.018);
-          circle(targetX, targetY, radius * 2);
+          const radius = 220 - i * 34;
+          fill(205, 44, 26, 0.014);
+          circle(pointerX, pointerY, radius * 2);
         }
       }
     }
 
+    function drawPointerHalo() {
+      if (!pointerActive) {
+        return;
+      }
+
+      noStroke();
+
+      fill(202, 35, 90, 0.035);
+      circle(pointerX, pointerY, 180);
+
+      fill(202, 30, 96, 0.07);
+      circle(pointerX, pointerY, 90);
+
+      fill(202, 22, 100, 0.18);
+      circle(pointerX, pointerY, 22);
+    }
+
+    function updatePresenceState() {
+      if (!introShown && frameCount > 120) {
+        introShown = true;
+        showVerse("In the beginning", 5000);
+      }
+
+      if (pointerActive) {
+        const moved = dist(pointerX, pointerY, lastPointerX, lastPointerY);
+
+        if (moved < 4) {
+          totalHoverTime += 1;
+          pointerStillFrames += 1;
+        } else {
+          totalHoverTime = max(0, totalHoverTime - 0.2);
+          pointerStillFrames = 0;
+        }
+
+        if (frameCount % 3 === 0) {
+          wakes.push(new Wake(pointerX, pointerY));
+        }
+
+        if (pointerStillFrames > 40 && frameCount % 18 === 0) {
+          wakes.push(new Wake(pointerX + random(-6, 6), pointerY + random(-6, 6)));
+        }
+
+        hintDiv.style("opacity", totalHoverTime > 200 ? "0" : "1");
+      } else {
+        totalHoverTime = max(0, totalHoverTime - 0.4);
+        pointerStillFrames = 0;
+      }
+
+      lastPointerX = pointerX;
+      lastPointerY = pointerY;
+
+      if (hoverTextCooldown > 0) {
+        hoverTextCooldown -= 1;
+      }
+    }
+
+    function updateScriptureSequence() {
+      if (wordIndex >= scriptureMoments.length - 1) {
+        return;
+      }
+
+      const nextIndex = wordIndex + 1;
+      if (nextIndex < scriptureMoments.length && totalHoverTime >= scriptureMoments[nextIndex].trigger && hoverTextCooldown === 0) {
+        wordIndex = nextIndex;
+        showVerse(scriptureMoments[wordIndex].text, 6500);
+        hoverTextCooldown = 240;
+      }
+    }
+
+    function showVerse(text, duration) {
+      verseDiv.html(text);
+      verseDiv.style("opacity", "0.85");
+
+      if (!introFadeScheduled) {
+        introFadeScheduled = true;
+      }
+
+      clearTimeout(showVerse.fadeTimer);
+      showVerse.fadeTimer = setTimeout(() => {
+        verseDiv.style("opacity", "0");
+      }, duration);
+    }
+
     function setPointer(x, y) {
-      targetX = constrain(x, 0, width);
-      targetY = constrain(y, 0, height);
+      pointerX = constrain(x, 0, width);
+      pointerY = constrain(y, 0, height);
       pointerActive = true;
     }
 
