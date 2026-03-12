@@ -1,179 +1,331 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-  <meta charset="UTF-8">
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>Rachaph — Hovering Presence</title>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/p5.js/1.9.4/p5.min.js"></script>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/p5.js/1.9.4/addons/p5.sound.min.js"></script>
   <style>
-    body { margin:0; padding:0; overflow:hidden; background:#000308; }
-    canvas { display:block; }
+    html,
+    body {
+      margin: 0;
+      padding: 0;
+      overflow: hidden;
+      background: #01040a;
+      touch-action: none;
+    }
+
+    canvas {
+      display: block;
+    }
+
     #verse {
       position: absolute;
       top: 50%;
       left: 50%;
       transform: translate(-50%, -50%);
-      color: rgba(130, 170, 255, 0.55);
-      font-size: 4.8rem;
-      letter-spacing: 6px;
+      color: rgba(120, 170, 255, 0.38);
+      font-size: 4.4rem;
+      letter-spacing: 0.18em;
       font-weight: 300;
       font-style: italic;
       text-align: center;
       pointer-events: none;
       opacity: 0;
-      transition: opacity 9s ease;
-      text-shadow: 0 0 50px rgba(50, 90, 255, 0.25);
+      transition: opacity 6s ease;
+      text-shadow: 0 0 24px rgba(70, 120, 255, 0.16);
       max-width: 90%;
       line-height: 1.3;
+      white-space: nowrap;
     }
+
+    @media (max-width: 900px) {
+      #verse {
+        font-size: 3rem;
+        letter-spacing: 0.12em;
+      }
+    }
+
     @media (max-width: 600px) {
-      #verse { font-size: 3.4rem; }
+      #verse {
+        font-size: 2.2rem;
+        letter-spacing: 0.08em;
+        white-space: normal;
+      }
     }
   </style>
 </head>
 <body>
-<div id="verse"></div>
+  <div id="verse"></div>
 
-<script>
-// Rachaph — Hovering Presence
-// Restored meditative droplets. Deep darkness. Soothing magnet. Sound from start.
+  <script>
+    let particles = [];
+    let verseDiv;
+    let ambientSound = null;
 
-let particles = [];
-let totalHoverTime = 0;
-let lastX = 0, lastY = 0;
-let wordIndex = -1;
-let ambientSound;
+    let totalHoverTime = 0;
+    let lastPointerX = 0;
+    let lastPointerY = 0;
+    let wordIndex = -1;
+    let currentTargetX = 0;
+    let currentTargetY = 0;
+    let pointerActive = false;
+    let audioStarted = false;
 
-const genesisWords = [
-  "In the beginning",
-  "God",
-  "created",
-  "heavens",
-  "earth",
-  "formless",
-  "void",
-  "darkness",
-  "deep",
-  "Spirit",
-  "hovering",
-  "waters"
-];
+    const genesisWords = [
+      "In the beginning",
+      "God",
+      "created",
+      "heavens",
+      "earth",
+      "formless",
+      "void",
+      "darkness",
+      "deep",
+      "Spirit",
+      "hovering",
+      "waters"
+    ];
 
-class Particle {
-  constructor() {
-    this.x = random(width);
-    this.y = random(height);
-    this.vx = random(-0.12, 0.12);  // very slow movement
-    this.vy = random(-0.12, 0.12);
-    this.size = random(0.8, 5);     // tiny to small droplets
-    this.hue = random(200, 240);   // deeper blues
-    this.alpha = 0.62;
-  }
+    class Particle {
+      constructor() {
+        this.reset(true);
+      }
 
-  update() {
-    this.x += this.vx;
-    this.y += this.vy;
-    if (this.x < 0) this.x = width;
-    if (this.x > width) this.x = 0;
-    if (this.y < 0) this.y = height;
-    if (this.y > height) this.y = 0;
-    
-    // tiny random jitter to keep natural
-    this.vx += random(-0.01, 0.01);
-    this.vy += random(-0.01, 0.01);
-    this.vx = constrain(this.vx, -0.15, 0.15);
-    this.vy = constrain(this.vy, -0.15, 0.15);
-  }
+      reset(initial = false) {
+        this.x = initial ? random(width) : random(width);
+        this.y = initial ? random(height) : random(height);
 
-  attractTo(mx, my) {
-    let d = dist(this.x, this.y, mx, my);
-    if (d < 520) {  // wide radius for visible gathering
-      let pull = map(d, 0, 520, 0.07, 0.0008);  // gentle, stronger near
-      let angle = atan2(my - this.y, mx - this.x);
-      this.vx += cos(angle) * pull;
-      this.vy += sin(angle) * pull;
+        this.vx = random(-0.06, 0.06);
+        this.vy = random(-0.04, 0.04);
 
-      if (d < 220) {
-        this.vx *= 0.91;   // calm/slow
-        this.vy *= 0.91;
-        this.alpha = lerp(this.alpha, 0.85, 0.008);
-        this.size = lerp(this.size, this.size * 1.08, 0.01);  // subtle swell
+        this.baseSize = random(1.2, 4.8);
+        this.size = this.baseSize;
+
+        this.hue = random(198, 214);
+        this.sat = random(40, 62);
+        this.bri = random(65, 92);
+        this.alpha = random(0.16, 0.34);
+      }
+
+      update(targetX, targetY, isPointerActive) {
+        const flowNoise = noise(this.x * 0.0018, this.y * 0.0018, frameCount * 0.003);
+        const angle = flowNoise * TWO_PI * 2.0;
+
+        this.vx += cos(angle) * 0.0035;
+        this.vy += sin(angle) * 0.0025;
+
+        if (isPointerActive) {
+          const dx = targetX - this.x;
+          const dy = targetY - this.y;
+          const d = sqrt(dx * dx + dy * dy);
+
+          if (d < 320) {
+            const influence = map(d, 0, 320, 0.028, 0.0015, true);
+            const nx = dx / max(d, 0.001);
+            const ny = dy / max(d, 0.001);
+
+            this.vx += nx * influence;
+            this.vy += ny * influence;
+
+            if (d < 140) {
+              this.vx *= 0.94;
+              this.vy *= 0.94;
+              this.size = lerp(this.size, this.baseSize * 1.22, 0.05);
+              this.alpha = lerp(this.alpha, 0.42, 0.04);
+            } else {
+              this.size = lerp(this.size, this.baseSize * 1.05, 0.03);
+              this.alpha = lerp(this.alpha, 0.3, 0.025);
+            }
+          } else {
+            this.size = lerp(this.size, this.baseSize, 0.03);
+            this.alpha = lerp(this.alpha, 0.22, 0.02);
+          }
+        } else {
+          this.size = lerp(this.size, this.baseSize, 0.02);
+          this.alpha = lerp(this.alpha, 0.22, 0.02);
+        }
+
+        this.vx *= 0.985;
+        this.vy *= 0.985;
+
+        this.vx = constrain(this.vx, -0.22, 0.22);
+        this.vy = constrain(this.vy, -0.18, 0.18);
+
+        this.x += this.vx;
+        this.y += this.vy;
+
+        if (this.x < -10) this.x = width + 10;
+        if (this.x > width + 10) this.x = -10;
+        if (this.y < -10) this.y = height + 10;
+        if (this.y > height + 10) this.y = -10;
+      }
+
+      draw() {
+        noStroke();
+
+        fill(this.hue, this.sat, this.bri, this.alpha * 0.18);
+        circle(this.x, this.y, this.size * 3.2);
+
+        fill(this.hue, this.sat, this.bri, this.alpha * 0.4);
+        circle(this.x, this.y, this.size * 1.8);
+
+        fill(this.hue, this.sat * 0.7, min(100, this.bri + 8), this.alpha);
+        circle(this.x, this.y, this.size);
       }
     }
-  }
 
-  draw() {
-    noStroke();
-    fill(this.hue, 72, 65, this.alpha);
-    circle(this.x, this.y, this.size);
-  }
-}
-
-function preload() {
-  // Soothing ambient sound (faint wind/water + breathing)
-  ambientSound = loadSound('https://assets.codepen.io/243235/deep-water-ambient.mp3');
-}
-
-function setup() {
-  createCanvas(windowWidth, windowHeight);
-  colorMode(HSB, 360, 100, 100, 1);
-
-  for (let i = 0; i < 1800; i++) {  // higher density for full void
-    particles.push(new Particle());
-  }
-
-  verseDiv = select('#verse');
-
-  if (ambientSound) {
-    ambientSound.loop();
-    ambientSound.setVolume(0.06);  // very faint
-  }
-}
-
-function draw() {
-  background(220, 100, 1, 0.012);  // ultra-slow deep blue/black fade
-
-  for (let p of particles) {
-    p.update();
-    p.attractTo(mouseX, mouseY);
-    p.draw();
-  }
-
-  let moved = dist(mouseX, mouseY, lastX, lastY);
-  if (moved < 8) {
-    totalHoverTime++;
-  } else {
-    totalHoverTime = max(0, totalHoverTime - 0.4);  // very slow decay
-  }
-  lastX = mouseX; lastY = mouseY;
-
-  // Genesis words — appear one at a time after calm hovering
-  if (totalHoverTime > 180 && wordIndex < genesisWords.length - 1) {
-    if (frameCount % 720 === 0) {  // ~12 seconds per word
-      wordIndex++;
-      let word = genesisWords[wordIndex];
-      verseDiv.html(word);
-      verseDiv.style('opacity', 0.68);
-      setTimeout(() => {
-        verseDiv.style('opacity', 0);
-      }, 18000);  // stay 18 seconds
+    function preload() {
+      soundFormats("mp3");
+      ambientSound = loadSound(
+        "https://assets.codepen.io/243235/deep-water-ambient.mp3",
+        () => {},
+        () => {
+          ambientSound = null;
+        }
+      );
     }
-  }
 
-  // Persistent faint stars where you hovered longest
-  if (totalHoverTime > 320) {
-    fill(60, 60, 100, 0.3);
-    for (let i = 0; i < 3; i++) {
-      let sx = mouseX + random(-80, 80);
-      let sy = mouseY + random(-80, 80);
-      circle(sx, sy, 1.2);
+    function setup() {
+      createCanvas(windowWidth, windowHeight);
+      colorMode(HSB, 360, 100, 100, 1);
+      pixelDensity(1);
+
+      verseDiv = select("#verse");
+
+      const particleCount = min(2200, floor((windowWidth * windowHeight) / 700));
+      for (let i = 0; i < particleCount; i++) {
+        particles.push(new Particle());
+      }
+
+      currentTargetX = width * 0.5;
+      currentTargetY = height * 0.5;
+      lastPointerX = currentTargetX;
+      lastPointerY = currentTargetY;
+
+      background(220, 70, 4, 1);
     }
-  }
-}
 
-function windowResized() {
-  resizeCanvas(windowWidth, windowHeight);
-}
-</script>
+    function draw() {
+      background(220, 70, 4, 0.22);
+
+      const targetX = pointerActive ? currentTargetX : width * 0.5;
+      const targetY = pointerActive ? currentTargetY : height * 0.5;
+
+      for (const particle of particles) {
+        particle.update(targetX, targetY, pointerActive);
+        particle.draw();
+      }
+
+      if (pointerActive) {
+        const moved = dist(currentTargetX, currentTargetY, lastPointerX, lastPointerY);
+
+        if (moved < 6) {
+          totalHoverTime += 1;
+        } else {
+          totalHoverTime = max(0, totalHoverTime - 0.35);
+        }
+
+        lastPointerX = currentTargetX;
+        lastPointerY = currentTargetY;
+      } else {
+        totalHoverTime = max(0, totalHoverTime - 0.5);
+      }
+
+      if (totalHoverTime > 160 && wordIndex < genesisWords.length - 1) {
+        if (frameCount % 600 === 0) {
+          wordIndex += 1;
+          verseDiv.html(genesisWords[wordIndex]);
+          verseDiv.style("opacity", "0.72");
+
+          setTimeout(() => {
+            verseDiv.style("opacity", "0");
+          }, 9000);
+        }
+      }
+
+      drawDepthVeil(targetX, targetY);
+    }
+
+    function drawDepthVeil(targetX, targetY) {
+      noStroke();
+
+      fill(220, 40, 6, 0.05);
+      rect(0, 0, width, height);
+
+      if (pointerActive) {
+        const r = 180;
+        for (let i = 0; i < 5; i++) {
+          const radius = r - i * 28;
+          fill(205, 40, 28, 0.018);
+          circle(targetX, targetY, radius * 2);
+        }
+      }
+    }
+
+    function startAmbientAudio() {
+      if (audioStarted || !ambientSound) {
+        return;
+      }
+
+      userStartAudio().then(() => {
+        if (!ambientSound.isPlaying()) {
+          ambientSound.setVolume(0.05);
+          ambientSound.loop();
+        }
+        audioStarted = true;
+      }).catch(() => {});
+    }
+
+    function setPointerPosition(x, y) {
+      currentTargetX = constrain(x, 0, width);
+      currentTargetY = constrain(y, 0, height);
+      pointerActive = true;
+      startAmbientAudio();
+    }
+
+    function mouseMoved() {
+      setPointerPosition(mouseX, mouseY);
+    }
+
+    function mouseDragged() {
+      setPointerPosition(mouseX, mouseY);
+    }
+
+    function touchStarted() {
+      if (touches.length > 0) {
+        setPointerPosition(touches[0].x, touches[0].y);
+      }
+      return false;
+    }
+
+    function touchMoved() {
+      if (touches.length > 0) {
+        setPointerPosition(touches[0].x, touches[0].y);
+      }
+      return false;
+    }
+
+    function touchEnded() {
+      if (touches.length === 0) {
+        pointerActive = false;
+      }
+      return false;
+    }
+
+    function mousePressed() {
+      startAmbientAudio();
+    }
+
+    function mouseOut() {
+      pointerActive = false;
+    }
+
+    function windowResized() {
+      resizeCanvas(windowWidth, windowHeight);
+      background(220, 70, 4, 1);
+    }
+  </script>
 </body>
 </html>
