@@ -5,10 +5,8 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>Rachaph — Hovering Presence</title>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/p5.js/1.9.4/p5.min.js"></script>
-  <script src="https://cdnjs.cloudflare.com/ajax/libs/p5.js/1.9.4/addons/p5.sound.min.js"></script>
   <style>
-    html,
-    body {
+    html, body {
       margin: 0;
       padding: 0;
       overflow: hidden;
@@ -38,6 +36,7 @@
       max-width: 90%;
       line-height: 1.3;
       white-space: nowrap;
+      z-index: 2;
     }
 
     @media (max-width: 900px) {
@@ -62,16 +61,15 @@
   <script>
     let particles = [];
     let verseDiv;
-    let ambientSound = null;
 
     let totalHoverTime = 0;
     let lastPointerX = 0;
     let lastPointerY = 0;
     let wordIndex = -1;
-    let currentTargetX = 0;
-    let currentTargetY = 0;
+
+    let targetX = 0;
+    let targetY = 0;
     let pointerActive = false;
-    let audioStarted = false;
 
     const genesisWords = [
       "In the beginning",
@@ -90,44 +88,37 @@
 
     class Particle {
       constructor() {
-        this.reset(true);
-      }
-
-      reset(initial = false) {
-        this.x = initial ? random(width) : random(width);
-        this.y = initial ? random(height) : random(height);
-
-        this.vx = random(-0.06, 0.06);
-        this.vy = random(-0.04, 0.04);
-
-        this.baseSize = random(1.2, 4.8);
+        this.x = random(width);
+        this.y = random(height);
+        this.vx = random(-0.05, 0.05);
+        this.vy = random(-0.03, 0.03);
+        this.baseSize = random(1.2, 4.5);
         this.size = this.baseSize;
-
         this.hue = random(198, 214);
-        this.sat = random(40, 62);
+        this.sat = random(38, 60);
         this.bri = random(65, 92);
-        this.alpha = random(0.16, 0.34);
+        this.alpha = random(0.15, 0.34);
       }
 
-      update(targetX, targetY, isPointerActive) {
-        const flowNoise = noise(this.x * 0.0018, this.y * 0.0018, frameCount * 0.003);
-        const angle = flowNoise * TWO_PI * 2.0;
+      update() {
+        const n = noise(this.x * 0.0018, this.y * 0.0018, frameCount * 0.003);
+        const angle = n * TWO_PI * 2.0;
 
-        this.vx += cos(angle) * 0.0035;
-        this.vy += sin(angle) * 0.0025;
+        this.vx += cos(angle) * 0.003;
+        this.vy += sin(angle) * 0.002;
 
-        if (isPointerActive) {
+        if (pointerActive) {
           const dx = targetX - this.x;
           const dy = targetY - this.y;
           const d = sqrt(dx * dx + dy * dy);
 
           if (d < 320) {
-            const influence = map(d, 0, 320, 0.028, 0.0015, true);
-            const nx = dx / max(d, 0.001);
-            const ny = dy / max(d, 0.001);
+            const force = map(d, 0, 320, 0.028, 0.0015, true);
+            const nx = dx / max(d, 0.0001);
+            const ny = dy / max(d, 0.0001);
 
-            this.vx += nx * influence;
-            this.vy += ny * influence;
+            this.vx += nx * force;
+            this.vy += ny * force;
 
             if (d < 140) {
               this.vx *= 0.94;
@@ -150,8 +141,8 @@
         this.vx *= 0.985;
         this.vy *= 0.985;
 
-        this.vx = constrain(this.vx, -0.22, 0.22);
-        this.vy = constrain(this.vy, -0.18, 0.18);
+        this.vx = constrain(this.vx, -0.2, 0.2);
+        this.vy = constrain(this.vy, -0.16, 0.16);
 
         this.x += this.vx;
         this.y += this.vy;
@@ -165,26 +156,15 @@
       draw() {
         noStroke();
 
-        fill(this.hue, this.sat, this.bri, this.alpha * 0.18);
-        circle(this.x, this.y, this.size * 3.2);
+        fill(this.hue, this.sat, this.bri, this.alpha * 0.16);
+        circle(this.x, this.y, this.size * 3.0);
 
-        fill(this.hue, this.sat, this.bri, this.alpha * 0.4);
+        fill(this.hue, this.sat, this.bri, this.alpha * 0.36);
         circle(this.x, this.y, this.size * 1.8);
 
-        fill(this.hue, this.sat * 0.7, min(100, this.bri + 8), this.alpha);
+        fill(this.hue, this.sat * 0.75, min(100, this.bri + 8), this.alpha);
         circle(this.x, this.y, this.size);
       }
-    }
-
-    function preload() {
-      soundFormats("mp3");
-      ambientSound = loadSound(
-        "https://assets.codepen.io/243235/deep-water-ambient.mp3",
-        () => {},
-        () => {
-          ambientSound = null;
-        }
-      );
     }
 
     function setup() {
@@ -199,27 +179,26 @@
         particles.push(new Particle());
       }
 
-      currentTargetX = width * 0.5;
-      currentTargetY = height * 0.5;
-      lastPointerX = currentTargetX;
-      lastPointerY = currentTargetY;
+      targetX = width * 0.5;
+      targetY = height * 0.5;
+      lastPointerX = targetX;
+      lastPointerY = targetY;
 
       background(220, 70, 4, 1);
     }
 
     function draw() {
-      background(220, 70, 4, 0.22);
-
-      const targetX = pointerActive ? currentTargetX : width * 0.5;
-      const targetY = pointerActive ? currentTargetY : height * 0.5;
+      background(220, 70, 4, 0.24);
 
       for (const particle of particles) {
-        particle.update(targetX, targetY, pointerActive);
+        particle.update();
         particle.draw();
       }
 
+      drawDepthVeil();
+
       if (pointerActive) {
-        const moved = dist(currentTargetX, currentTargetY, lastPointerX, lastPointerY);
+        const moved = dist(targetX, targetY, lastPointerX, lastPointerY);
 
         if (moved < 6) {
           totalHoverTime += 1;
@@ -227,8 +206,8 @@
           totalHoverTime = max(0, totalHoverTime - 0.35);
         }
 
-        lastPointerX = currentTargetX;
-        lastPointerY = currentTargetY;
+        lastPointerX = targetX;
+        lastPointerY = targetY;
       } else {
         totalHoverTime = max(0, totalHoverTime - 0.5);
       }
@@ -244,13 +223,10 @@
           }, 9000);
         }
       }
-
-      drawDepthVeil(targetX, targetY);
     }
 
-    function drawDepthVeil(targetX, targetY) {
+    function drawDepthVeil() {
       noStroke();
-
       fill(220, 40, 6, 0.05);
       rect(0, 0, width, height);
 
@@ -264,45 +240,30 @@
       }
     }
 
-    function startAmbientAudio() {
-      if (audioStarted || !ambientSound) {
-        return;
-      }
-
-      userStartAudio().then(() => {
-        if (!ambientSound.isPlaying()) {
-          ambientSound.setVolume(0.05);
-          ambientSound.loop();
-        }
-        audioStarted = true;
-      }).catch(() => {});
-    }
-
-    function setPointerPosition(x, y) {
-      currentTargetX = constrain(x, 0, width);
-      currentTargetY = constrain(y, 0, height);
+    function setPointer(x, y) {
+      targetX = constrain(x, 0, width);
+      targetY = constrain(y, 0, height);
       pointerActive = true;
-      startAmbientAudio();
     }
 
     function mouseMoved() {
-      setPointerPosition(mouseX, mouseY);
+      setPointer(mouseX, mouseY);
     }
 
     function mouseDragged() {
-      setPointerPosition(mouseX, mouseY);
+      setPointer(mouseX, mouseY);
     }
 
     function touchStarted() {
       if (touches.length > 0) {
-        setPointerPosition(touches[0].x, touches[0].y);
+        setPointer(touches[0].x, touches[0].y);
       }
       return false;
     }
 
     function touchMoved() {
       if (touches.length > 0) {
-        setPointerPosition(touches[0].x, touches[0].y);
+        setPointer(touches[0].x, touches[0].y);
       }
       return false;
     }
@@ -312,10 +273,6 @@
         pointerActive = false;
       }
       return false;
-    }
-
-    function mousePressed() {
-      startAmbientAudio();
     }
 
     function mouseOut() {
