@@ -5,6 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>Rachaph — Hovering Presence</title>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/p5.js/1.9.4/p5.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/p5.js/1.9.4/addons/p5.sound.min.js"></script>
   <style>
     html, body {
       margin: 0;
@@ -23,7 +24,7 @@
       top: 16%;
       left: 50%;
       transform: translateX(-50%);
-      color: rgba(145, 185, 255, 0.5);
+      color: rgba(145, 185, 255, 0.54);
       font-size: 2.8rem;
       letter-spacing: 0.12em;
       font-weight: 300;
@@ -31,7 +32,7 @@
       text-align: center;
       pointer-events: none;
       opacity: 0;
-      transition: opacity 2.8s ease;
+      transition: opacity 1.7s ease;
       text-shadow: 0 0 18px rgba(70, 120, 255, 0.18);
       max-width: 90%;
       line-height: 1.3;
@@ -43,13 +44,13 @@
       bottom: 8%;
       left: 50%;
       transform: translateX(-50%);
-      color: rgba(170, 195, 255, 0.22);
+      color: rgba(170, 195, 255, 0.26);
       font-size: 1rem;
       letter-spacing: 0.08em;
       text-align: center;
       pointer-events: none;
       opacity: 1;
-      transition: opacity 2s ease;
+      transition: opacity 1.2s ease;
       z-index: 2;
       white-space: nowrap;
     }
@@ -90,6 +91,7 @@
     let pointerStillFrames = 0;
     let lastPointerX = 0;
     let lastPointerY = 0;
+    let movementSpeed = 0;
 
     let pointerX = 0;
     let pointerY = 0;
@@ -97,14 +99,19 @@
 
     let wordIndex = -1;
     let introShown = false;
-    let introFadeScheduled = false;
     let hoverTextCooldown = 0;
 
+    let windOsc;
+    let breathOsc;
+    let windFilter;
+    let noiseEnvReady = false;
+    let audioStarted = false;
+
     const scriptureMoments = [
-      { text: "In the beginning", trigger: 360 },
-      { text: "darkness over the deep", trigger: 900 },
-      { text: "hovering over the waters", trigger: 1500 },
-      { text: "Let there be light", trigger: 2200 }
+      { text: "In the beginning", trigger: 0, duration: 3800 },
+      { text: "darkness over the deep", trigger: 140, duration: 4200 },
+      { text: "hovering over the waters", trigger: 320, duration: 4600 },
+      { text: "Let there be light", trigger: 620, duration: 5200 }
     ];
 
     class Particle {
@@ -134,26 +141,26 @@
           const dy = pointerY - this.y;
           const d = sqrt(dx * dx + dy * dy);
 
-          if (d < 360) {
+          if (d < 300) {
             const nx = dx / max(d, 0.0001);
             const ny = dy / max(d, 0.0001);
 
-            const farForce = map(d, 0, 360, 0.036, 0.002, true);
+            const farForce = map(d, 0, 300, 0.038, 0.003, true);
             this.vx += nx * farForce;
             this.vy += ny * farForce;
 
-            if (d < 130) {
-              const nearForce = map(d, 0, 130, 0.05, 0.01, true);
+            if (d < 110) {
+              const nearForce = map(d, 0, 110, 0.056, 0.012, true);
               this.vx += nx * nearForce;
               this.vy += ny * nearForce;
               this.vx *= 0.93;
               this.vy *= 0.93;
-              this.size = lerp(this.size, this.baseSize * 1.35, 0.08);
-              this.alpha = lerp(this.alpha, 0.48, 0.06);
+              this.size = lerp(this.size, this.baseSize * 1.32, 0.08);
+              this.alpha = lerp(this.alpha, 0.5, 0.06);
               this.glow = lerp(this.glow, 1, 0.1);
             } else {
               this.size = lerp(this.size, this.baseSize * 1.08, 0.04);
-              this.alpha = lerp(this.alpha, 0.28, 0.03);
+              this.alpha = lerp(this.alpha, 0.3, 0.03);
               this.glow = lerp(this.glow, 0.35, 0.04);
             }
           } else {
@@ -189,10 +196,10 @@
         const brightnessBoost = this.glow * 18;
 
         fill(this.hue, this.sat, min(100, this.bri + brightnessBoost * 0.25), (this.alpha + glowBoost) * 0.14);
-        circle(this.x, this.y, this.size * 4.2);
+        circle(this.x, this.y, this.size * 4.0);
 
         fill(this.hue, this.sat, min(100, this.bri + brightnessBoost * 0.45), (this.alpha + glowBoost) * 0.3);
-        circle(this.x, this.y, this.size * 2.2);
+        circle(this.x, this.y, this.size * 2.1);
 
         fill(this.hue, this.sat * 0.72, min(100, this.bri + brightnessBoost), this.alpha + glowBoost * 0.8);
         circle(this.x, this.y, this.size);
@@ -204,19 +211,19 @@
         this.x = x;
         this.y = y;
         this.life = 1;
-        this.size = random(12, 28);
+        this.size = random(8, 18);
       }
 
       update() {
-        this.life -= 0.025;
-        this.size += 0.45;
+        this.life -= 0.03;
+        this.size += 0.38;
       }
 
       draw() {
         noFill();
-        stroke(205, 42, 78, this.life * 0.06);
-        strokeWeight(1.2);
-        circle(this.x, this.y, this.size);
+        stroke(205, 42, 78, this.life * 0.045);
+        strokeWeight(1);
+        ellipse(this.x, this.y, this.size * 0.85, this.size * 1.2);
       }
 
       isDead() {
@@ -260,12 +267,12 @@
       drawPointerHalo();
       updatePresenceState();
       updateScriptureSequence();
+      updateSound();
     }
 
     function drawBreathField() {
       noStroke();
-
-      const pulse = map(sin(frameCount * 0.01), -1, 1, 0.02, 0.05);
+      const pulse = map(sin(frameCount * 0.014), -1, 1, 0.018, 0.045);
       fill(215, 40, 8, pulse);
       rect(0, 0, width, height);
     }
@@ -287,10 +294,10 @@
       rect(0, 0, width, height);
 
       if (pointerActive) {
-        for (let i = 0; i < 5; i++) {
-          const radius = 220 - i * 34;
-          fill(205, 44, 26, 0.014);
-          circle(pointerX, pointerY, radius * 2);
+        for (let i = 0; i < 4; i++) {
+          const radius = 130 - i * 20;
+          fill(205, 44, 26, 0.013);
+          ellipse(pointerX, pointerY, radius * 1.05, radius * 1.5);
         }
       }
     }
@@ -302,45 +309,47 @@
 
       noStroke();
 
-      fill(202, 35, 90, 0.035);
-      circle(pointerX, pointerY, 180);
+      fill(202, 35, 90, 0.03);
+      ellipse(pointerX, pointerY, 72, 110);
 
-      fill(202, 30, 96, 0.07);
-      circle(pointerX, pointerY, 90);
+      fill(202, 30, 96, 0.06);
+      ellipse(pointerX, pointerY, 34, 52);
 
-      fill(202, 22, 100, 0.18);
-      circle(pointerX, pointerY, 22);
+      fill(202, 20, 100, 0.14);
+      ellipse(pointerX, pointerY, 12, 18);
     }
 
     function updatePresenceState() {
-      if (!introShown && frameCount > 120) {
+      if (!introShown && frameCount > 45) {
         introShown = true;
-        showVerse("In the beginning", 5000);
+        showVerse("In the beginning", 3200);
       }
 
       if (pointerActive) {
         const moved = dist(pointerX, pointerY, lastPointerX, lastPointerY);
+        movementSpeed = lerp(movementSpeed, moved, 0.25);
 
         if (moved < 4) {
           totalHoverTime += 1;
           pointerStillFrames += 1;
         } else {
-          totalHoverTime = max(0, totalHoverTime - 0.2);
+          totalHoverTime = max(0, totalHoverTime - 0.12);
           pointerStillFrames = 0;
         }
 
-        if (frameCount % 3 === 0) {
+        if (frameCount % 4 === 0) {
           wakes.push(new Wake(pointerX, pointerY));
         }
 
-        if (pointerStillFrames > 40 && frameCount % 18 === 0) {
-          wakes.push(new Wake(pointerX + random(-6, 6), pointerY + random(-6, 6)));
+        if (pointerStillFrames > 26 && frameCount % 14 === 0) {
+          wakes.push(new Wake(pointerX + random(-4, 4), pointerY + random(-4, 4)));
         }
 
-        hintDiv.style("opacity", totalHoverTime > 200 ? "0" : "1");
+        hintDiv.style("opacity", totalHoverTime > 120 ? "0" : "1");
       } else {
-        totalHoverTime = max(0, totalHoverTime - 0.4);
+        totalHoverTime = max(0, totalHoverTime - 0.3);
         pointerStillFrames = 0;
+        movementSpeed = lerp(movementSpeed, 0, 0.1);
       }
 
       lastPointerX = pointerX;
@@ -359,18 +368,14 @@
       const nextIndex = wordIndex + 1;
       if (nextIndex < scriptureMoments.length && totalHoverTime >= scriptureMoments[nextIndex].trigger && hoverTextCooldown === 0) {
         wordIndex = nextIndex;
-        showVerse(scriptureMoments[wordIndex].text, 6500);
-        hoverTextCooldown = 240;
+        showVerse(scriptureMoments[wordIndex].text, scriptureMoments[wordIndex].duration);
+        hoverTextCooldown = 110;
       }
     }
 
     function showVerse(text, duration) {
       verseDiv.html(text);
-      verseDiv.style("opacity", "0.85");
-
-      if (!introFadeScheduled) {
-        introFadeScheduled = true;
-      }
+      verseDiv.style("opacity", "0.88");
 
       clearTimeout(showVerse.fadeTimer);
       showVerse.fadeTimer = setTimeout(() => {
@@ -378,10 +383,63 @@
       }, duration);
     }
 
+    function initAudio() {
+      if (audioStarted) {
+        return;
+      }
+
+      userStartAudio();
+
+      windOsc = new p5.Oscillator("triangle");
+      breathOsc = new p5.Oscillator("sine");
+      windFilter = new p5.LowPass();
+
+      windOsc.disconnect();
+      breathOsc.disconnect();
+
+      windOsc.connect(windFilter);
+      breathOsc.connect(windFilter);
+
+      windFilter.freq(700);
+      windFilter.res(3);
+
+      windOsc.amp(0);
+      breathOsc.amp(0);
+
+      windOsc.start();
+      breathOsc.start();
+
+      audioStarted = true;
+      noiseEnvReady = true;
+    }
+
+    function updateSound() {
+      if (!noiseEnvReady) {
+        return;
+      }
+
+      const movementAmount = constrain(movementSpeed / 18, 0, 1);
+      const drift = map(noise(frameCount * 0.01), 0, 1, 110, 180);
+      const breath = map(sin(frameCount * 0.018), -1, 1, 58, 72);
+      const filterFreq = map(movementAmount, 0, 1, 420, 1400);
+
+      windOsc.freq(drift + movementAmount * 36);
+      breathOsc.freq(breath);
+
+      windFilter.freq(filterFreq);
+
+      const windAmp = pointerActive ? map(movementAmount, 0, 1, 0.004, 0.026) : 0;
+      const breathAmpValue = pointerActive ? map(movementAmount, 0, 1, 0.01, 0.004) : 0.006;
+
+      windOsc.amp(windAmp, 0.18);
+      breathOsc.amp(breathAmpValue, 0.24);
+    }
+
     function setPointer(x, y) {
       pointerX = constrain(x, 0, width);
       pointerY = constrain(y, 0, height);
       pointerActive = true;
+      initAudio();
     }
 
     function mouseMoved() {
@@ -392,10 +450,18 @@
       setPointer(mouseX, mouseY);
     }
 
+    function mousePressed() {
+      initAudio();
+      setPointer(mouseX, mouseY);
+    }
+
     function touchStarted() {
+      initAudio();
+
       if (touches.length > 0) {
         setPointer(touches[0].x, touches[0].y);
       }
+
       return false;
     }
 
@@ -403,6 +469,7 @@
       if (touches.length > 0) {
         setPointer(touches[0].x, touches[0].y);
       }
+
       return false;
     }
 
@@ -410,6 +477,7 @@
       if (touches.length === 0) {
         pointerActive = false;
       }
+
       return false;
     }
 
