@@ -15,17 +15,15 @@
       touch-action: none;
       font-family: Georgia, "Times New Roman", serif;
     }
-
     canvas {
       display: block;
     }
-
     #verse {
       position: absolute;
       top: 12%;
       left: 50%;
       transform: translateX(-50%);
-      color: rgba(160, 196, 255, 0.72);
+      color: rgba(160, 196, 255, 0.78);
       font-size: 2.4rem;
       letter-spacing: 0.08em;
       font-weight: 300;
@@ -33,115 +31,86 @@
       text-align: center;
       pointer-events: none;
       opacity: 0;
-      transition: opacity 0.8s ease;
-      text-shadow: 0 0 24px rgba(90, 130, 255, 0.22);
+      transition: opacity 1.2s ease;
+      text-shadow: 0 0 28px rgba(90, 130, 255, 0.28);
       max-width: 88%;
-      line-height: 1.35;
+      line-height: 1.38;
       z-index: 2;
     }
-
     #hint {
       position: absolute;
       bottom: 7%;
       left: 50%;
       transform: translateX(-50%);
-      color: rgba(184, 202, 255, 0.44);
+      color: rgba(184, 202, 255, 0.38);
       font-size: 1rem;
       letter-spacing: 0.06em;
       text-align: center;
       pointer-events: none;
       opacity: 1;
-      transition: opacity 0.8s ease, color 0.8s ease;
+      transition: opacity 1.2s ease, color 1s ease;
       z-index: 2;
       max-width: 90%;
     }
-
-    #progress {
-      position: absolute;
-      bottom: 11%;
-      left: 50%;
-      transform: translateX(-50%);
-      color: rgba(208, 220, 255, 0.22);
-      font-size: 0.9rem;
-      letter-spacing: 0.08em;
-      text-align: center;
-      pointer-events: none;
-      opacity: 1;
-      transition: opacity 0.8s ease, color 0.8s ease;
-      z-index: 2;
-      max-width: 90%;
-    }
-
     @media (max-width: 900px) {
       #verse {
         font-size: 1.95rem;
       }
     }
-
     @media (max-width: 600px) {
       #verse {
         font-size: 1.45rem;
         top: 10%;
         letter-spacing: 0.04em;
       }
-
       #hint {
         font-size: 0.9rem;
-      }
-
-      #progress {
-        font-size: 0.82rem;
       }
     }
   </style>
 </head>
 <body>
   <div id="verse"></div>
-  <div id="progress">5 hidden places remain</div>
-  <div id="hint">move through the deep</div>
+  <div id="hint">linger in the light above</div>
 
   <script>
     let particles = [];
     let wakes = [];
     let farStars = [];
+    let beams = [];
     let verseDiv;
     let hintDiv;
-    let progressDiv;
-
     let pointerX = 0;
     let pointerY = 0;
     let pointerActive = false;
     let lastPointerX = 0;
     let lastPointerY = 0;
     let movementSpeed = 0;
-
     let cameraDriftX = 0;
     let cameraDriftY = 0;
-
     let audioStarted = false;
     let windOsc;
     let breathOsc;
     let windFilter;
-
-    let zones = [];
-    let discoveredCount = 0;
-    let finalLightUnlocked = false;
-    let finalLightActivated = false;
+    let cumulativeDwellMs = 0;
+    let lastDwellTime = 0;
+    let currentBeamIndex = 0;
+    let inBeam = false;
+    let wideBeamActive = false;
+    let wideBeamProgress = 0;
+    let wideBeamShown = false;
     let introShown = false;
 
-    const zoneTexts = [
-      "without form",
-      "and void",
-      "darkness",
-      "over the deep",
-      "hovering over the waters"
+    const beamPhrases = [
+      "hovering over the face of the waters",
+      "Spirit brooding upon the deep",
+      "above the formless void",
+      "moving gently on the waters",
+      "breath waiting in the darkness",
+      "stillness before the word"
     ];
 
-    const finalLight = {
-      x: 0.84,
-      y: 0.18,
-      size: 1
-    };
+    const genesisVerse = "In the beginning God created the heavens and the earth.";
 
     class Particle {
       constructor() {
@@ -158,13 +127,11 @@
         this.glow = 0;
         this.seed = random(1000);
       }
-
       update() {
         const nx = (this.x + cameraDriftX * 0.25) * 0.0015;
         const ny = (this.y + cameraDriftY * 0.25) * 0.0015;
         const n = noise(nx, ny, frameCount * 0.0025 + this.seed);
         const angle = n * TWO_PI * 2.0;
-
         this.vx += cos(angle) * 0.0023;
         this.vy += sin(angle) * 0.0018;
 
@@ -172,27 +139,22 @@
           const dx = pointerX - this.x;
           const dy = pointerY - this.y;
           const d = sqrt(dx * dx + dy * dy);
-
           if (d < 220) {
             const nxDir = dx / max(d, 0.0001);
             const nyDir = dy / max(d, 0.0001);
             const tangentX = -nyDir;
             const tangentY = nxDir;
-
             const pull = map(d, 0, 220, 0.016, 0.002, true);
             const swirl = map(d, 0, 220, 0.007, 0.001, true);
-
             this.vx += nxDir * pull;
             this.vy += nyDir * pull;
             this.vx += tangentX * swirl * sin(frameCount * 0.01 + this.seed);
             this.vy += tangentY * swirl * sin(frameCount * 0.01 + this.seed);
-
             if (d < 42) {
               const repel = map(d, 0, 42, 0.04, 0.004, true);
               this.vx -= nxDir * repel;
               this.vy -= nyDir * repel;
             }
-
             this.size = lerp(this.size, this.baseSize * 1.08, 0.04);
             this.alpha = lerp(this.alpha, 0.28, 0.03);
             this.glow = lerp(this.glow, 0.8, 0.05);
@@ -209,13 +171,10 @@
 
         this.vx += cameraVelocityX() * 0.004;
         this.vy += cameraVelocityY() * 0.004;
-
         this.vx *= 0.984;
         this.vy *= 0.984;
-
         this.vx = constrain(this.vx, -0.16, 0.16);
         this.vy = constrain(this.vy, -0.12, 0.12);
-
         this.x += this.vx;
         this.y += this.vy;
 
@@ -224,19 +183,14 @@
         if (this.y < -12) this.y = height + 12;
         if (this.y > height + 12) this.y = -12;
       }
-
       draw() {
         noStroke();
-
         const glowBoost = this.glow * 0.14;
         const brightBoost = this.glow * 14;
-
         fill(this.hue, this.sat, min(100, this.bri + brightBoost * 0.25), (this.alpha + glowBoost) * 0.13);
         circle(this.x, this.y, this.size * 3.6);
-
         fill(this.hue, this.sat, min(100, this.bri + brightBoost * 0.4), (this.alpha + glowBoost) * 0.28);
         circle(this.x, this.y, this.size * 1.95);
-
         fill(this.hue, this.sat * 0.74, min(100, this.bri + brightBoost), this.alpha + glowBoost * 0.7);
         circle(this.x, this.y, this.size);
       }
@@ -249,19 +203,16 @@
         this.life = 1;
         this.size = random(7, 16);
       }
-
       update() {
         this.life -= 0.028;
         this.size += 0.28;
       }
-
       draw() {
         noFill();
         stroke(205, 40, 78, this.life * 0.04);
         strokeWeight(1);
         circle(this.x, this.y, this.size);
       }
-
       isDead() {
         return this.life <= 0;
       }
@@ -277,18 +228,70 @@
         this.hue = random(205, 225);
         this.seed = random(1000);
       }
-
       draw() {
         const px = wrap(this.baseX - cameraDriftX * this.depth * 0.07, width);
         const py = wrap(this.baseY - cameraDriftY * this.depth * 0.05, height);
         const pulse = map(noise(this.seed, frameCount * 0.008), 0, 1, 0.8, 1.15);
-
         noStroke();
         fill(this.hue, 20, 100, this.alpha * 0.18);
         circle(px, py, this.size * 3.2 * pulse);
-
         fill(this.hue, 12, 100, this.alpha);
         circle(px, py, this.size * pulse);
+      }
+    }
+
+    class SoftBeam {
+      constructor(index) {
+        this.index = index;
+        this.baseX = random(0.15, 0.85);
+        this.driftPhase = random(TWO_PI);
+        this.driftSpeed = random(0.0003, 0.0007);
+        this.breathPhase = random(TWO_PI);
+      }
+
+      getX() {
+        let drift = sin(millis() * this.driftSpeed + this.driftPhase) * 0.18;
+        return constrain(this.baseX + drift, 0.05, 0.95);
+      }
+
+      getY() {
+        return height * 0.08 + sin(millis() * 0.0008 + this.breathPhase) * height * 0.03;
+      }
+
+      contains(px, py) {
+        const bx = width * this.getX();
+        const by = this.getY();
+        const dx = px - bx;
+        const dy = py - by;
+        const distToCenter = sqrt(dx*dx + dy*dy);
+        const angle = atan2(dy, dx);
+        const widthFactor = map(by, 0, height*0.4, 220, 70);
+        return distToCenter < widthFactor && abs(angle) < HALF_PI * 0.85;
+      }
+
+      draw() {
+        const bx = width * this.getX();
+        const by = this.getY();
+        noStroke();
+
+        // resting faint glow
+        for (let i = 0; i < 5; i++) {
+          let a = map(i, 0, 4, 0.009, 0.0009);
+          let r = map(i, 0, 4, 340, 90);
+          fill(205, 32, 88, a);
+          ellipse(bx, by, r * 1.8, r * 3.4);
+        }
+
+        // brighter when this is current sequence beam and pointer inside
+        if (currentBeamIndex === this.index && inBeam) {
+          let pulse = map(sin(millis() * 0.0022 + this.index * 1.4), -1, 1, 0.92, 1.08);
+          for (let i = 0; i < 7; i++) {
+            let a = map(i, 0, 6, 0.065, 0.004) * pulse;
+            let r = map(i, 0, 6, 420, 110);
+            fill(198, 40, 94, a);
+            ellipse(bx, by, r * 1.9, r * 3.6);
+          }
+        }
       }
     }
 
@@ -296,37 +299,55 @@
       createCanvas(windowWidth, windowHeight);
       colorMode(HSB, 360, 100, 100, 1);
       pixelDensity(1);
-
       verseDiv = select("#verse");
       hintDiv = select("#hint");
-      progressDiv = select("#progress");
 
       const particleCount = min(2400, floor((windowWidth * windowHeight) / 720));
       for (let i = 0; i < particleCount; i++) {
         particles.push(new Particle());
       }
-
       for (let i = 0; i < 220; i++) {
         farStars.push(new FarStar(random(0.2, 1)));
       }
-
-      createZones();
+      for (let i = 0; i < beamPhrases.length; i++) {
+        beams.push(new SoftBeam(i));
+      }
 
       pointerX = width * 0.5;
       pointerY = height * 0.58;
       lastPointerX = pointerX;
       lastPointerY = pointerY;
-
       background(220, 70, 4, 1);
     }
 
     function draw() {
       background(220, 70, 4, 0.19);
-
       updateCameraDrift();
+
       drawBreathField();
       drawFarStars();
-      drawZoneAuras();
+
+      // beams behind particles
+      for (const beam of beams) {
+        beam.draw();
+      }
+
+      // wide central beam (final moment)
+      if (wideBeamActive) {
+        wideBeamProgress = min(wideBeamProgress + 0.00075, 1);
+        const centerX = width * 0.5;
+        const topY = height * 0.05;
+        noStroke();
+        for (let i = 0; i < 14; i++) {
+          let prog = wideBeamProgress * (1 + i * 0.07);
+          let a = map(i, 0, 13, 0.085, 0.003) * prog;
+          let w = width * 1.3 * prog;
+          let h = height * 1.5 * prog;
+          fill(210, 28, 98, a);
+          ellipse(centerX, topY, w, h);
+        }
+      }
+
       drawWakeTrail();
 
       for (const particle of particles) {
@@ -336,37 +357,25 @@
 
       drawDepthVeil();
       drawPointerHalo();
-      drawFinalLight();
+
       updatePresence();
+      updateBeamsAndDwell();
       updateHint();
       updateSound();
 
       if (!introShown && frameCount > 12) {
         introShown = true;
-        showVerse("before speech, before form", 2800);
+        showVerse("before speech, before form", 3200);
       }
-    }
-
-    function createZones() {
-      zones = [
-        { x: 0.18, y: 0.26, r: 70, found: false, text: zoneTexts[0], bloom: 0 },
-        { x: 0.72, y: 0.30, r: 78, found: false, text: zoneTexts[1], bloom: 0 },
-        { x: 0.28, y: 0.68, r: 74, found: false, text: zoneTexts[2], bloom: 0 },
-        { x: 0.62, y: 0.62, r: 82, found: false, text: zoneTexts[3], bloom: 0 },
-        { x: 0.47, y: 0.46, r: 86, found: false, text: zoneTexts[4], bloom: 0 }
-      ];
     }
 
     function drawBreathField() {
       noStroke();
-
       const pulse = map(sin(frameCount * 0.012), -1, 1, 0.014, 0.038);
       fill(215, 38, 8, pulse);
       rect(0, 0, width, height);
-
       const driftGlowX = width * 0.5 + sin(frameCount * 0.0019) * width * 0.18;
       const driftGlowY = height * 0.52 + cos(frameCount * 0.0013) * height * 0.12;
-
       fill(210, 30, 12, 0.018);
       ellipse(driftGlowX, driftGlowY, width * 0.9, height * 0.65);
     }
@@ -377,38 +386,10 @@
       }
     }
 
-    function drawZoneAuras() {
-      noStroke();
-
-      for (const zone of zones) {
-        const x = width * zone.x;
-        const y = height * zone.y;
-        const shimmer = map(sin(frameCount * 0.02 + x * 0.01 + y * 0.01), -1, 1, 0.008, 0.022);
-
-        zone.bloom = max(0, zone.bloom - 0.015);
-
-        if (!zone.found) {
-          fill(210, 40, 24, shimmer);
-          circle(x, y, zone.r * 1.9);
-
-          fill(205, 26, 45, shimmer * 0.8);
-          circle(x, y, zone.r * 1.15);
-        } else {
-          const bloomAlpha = 0.03 + zone.bloom * 0.12;
-          fill(198, 48, 72, bloomAlpha);
-          circle(x, y, zone.r * (1.8 + zone.bloom * 0.7));
-
-          fill(198, 35, 96, bloomAlpha * 0.75);
-          circle(x, y, zone.r * (0.95 + zone.bloom * 0.5));
-        }
-      }
-    }
-
     function drawWakeTrail() {
       for (let i = wakes.length - 1; i >= 0; i--) {
         wakes[i].update();
         wakes[i].draw();
-
         if (wakes[i].isDead()) {
           wakes.splice(i, 1);
         }
@@ -419,7 +400,6 @@
       noStroke();
       fill(220, 40, 6, 0.04);
       rect(0, 0, width, height);
-
       if (pointerActive) {
         for (let i = 0; i < 4; i++) {
           const radius = 92 - i * 16;
@@ -431,115 +411,74 @@
 
     function drawPointerHalo() {
       if (!pointerActive) return;
-
       noStroke();
-
       fill(202, 34, 90, 0.024);
       circle(pointerX, pointerY, 82);
-
       fill(202, 28, 96, 0.055);
       circle(pointerX, pointerY, 38);
-
       fill(202, 18, 100, 0.13);
       circle(pointerX, pointerY, 14);
-    }
-
-    function drawFinalLight() {
-      const x = width * finalLight.x + sin(frameCount * 0.0017) * 16;
-      const y = height * finalLight.y + cos(frameCount * 0.0011) * 10;
-      const pulse = map(sin(frameCount * 0.03), -1, 1, 0.92, 1.16);
-
-      noStroke();
-
-      fill(56, 24, 100, finalLightUnlocked ? 0.028 : 0.014);
-      ellipse(x, y + 8, 220 * pulse, 120 * pulse);
-
-      fill(58, 18, 100, finalLightUnlocked ? 0.12 : 0.05);
-      circle(x, y, 140 * pulse);
-
-      fill(56, 20, 100, finalLightUnlocked ? 0.3 : 0.12);
-      circle(x, y, 56 * pulse);
-
-      fill(52, 16, 100, finalLightUnlocked ? 0.95 : 0.42);
-      circle(x, y, 12 * pulse);
-
-      if (finalLightUnlocked) {
-        stroke(54, 18, 100, 0.08);
-        strokeWeight(1);
-        line(x, y + 14, x, y + 80);
-        noStroke();
-      }
     }
 
     function updatePresence() {
       if (pointerActive) {
         const moved = dist(pointerX, pointerY, lastPointerX, lastPointerY);
         movementSpeed = lerp(movementSpeed, moved, 0.22);
-
         if (moved > 1.2 && frameCount % 5 === 0) {
           wakes.push(new Wake(pointerX, pointerY));
         }
-
-        checkZoneDiscovery();
       } else {
         movementSpeed = lerp(movementSpeed, 0, 0.08);
       }
-
       lastPointerX = pointerX;
       lastPointerY = pointerY;
     }
 
-    function checkZoneDiscovery() {
-      for (const zone of zones) {
-        if (zone.found) continue;
+    function updateBeamsAndDwell() {
+      inBeam = false;
+      const currentMillis = millis();
 
-        const zx = width * zone.x;
-        const zy = height * zone.y;
-        const d = dist(pointerX, pointerY, zx, zy);
+      for (const beam of beams) {
+        if (pointerActive && beam.contains(pointerX, pointerY)) {
+          inBeam = true;
+          cumulativeDwellMs += currentMillis - lastDwellTime;
 
-        if (d < zone.r) {
-          zone.found = true;
-          zone.bloom = 1;
-          discoveredCount += 1;
-          showVerse(zone.text, 2600);
-
-          if (discoveredCount === zones.length) {
-            finalLightUnlocked = true;
-            showVerse("a light waits in the distance", 3200);
+          // reveal phrase only for current sequence beam
+          if (currentBeamIndex === beam.index) {
+            if (cumulativeDwellMs - lastDwellTime > 3200) {  // ~3.2s linger
+              showVerse(beamPhrases[currentBeamIndex], 4800);
+              currentBeamIndex = (currentBeamIndex + 1) % beamPhrases.length;
+              // optional: reset dwell timer after reveal to avoid instant re-trigger
+              lastDwellTime = currentMillis;
+            }
           }
+          break; // only one beam at a time
         }
+      }
+
+      lastDwellTime = currentMillis;
+
+      // trigger wide beam once after ~2.5 min total dwell
+      if (cumulativeDwellMs > 150000 && !wideBeamActive) {
+        wideBeamActive = true;
+        showVerse(genesisVerse, 14000);
+        wideBeamShown = true;
       }
     }
 
     function updateHint() {
-      const remaining = zones.length - discoveredCount;
-
-      if (finalLightActivated) {
-        hintDiv.html("In the beginning");
-        progressDiv.html("all hidden places opened");
-        hintDiv.style("color", "rgba(226, 232, 255, 0.58)");
-        progressDiv.style("color", "rgba(226, 232, 255, 0.34)");
-        return;
+      if (wideBeamActive) {
+        hintDiv.html("and the Spirit hovered...");
+        hintDiv.style("color", "rgba(220, 240, 255, 0.48)");
+      } else {
+        hintDiv.html("linger in the light above");
+        hintDiv.style("color", "rgba(184, 202, 255, 0.38)");
       }
-
-      if (finalLightUnlocked) {
-        hintDiv.html("click the distant light");
-        progressDiv.html("all 5 hidden places opened");
-        hintDiv.style("color", "rgba(255, 236, 170, 0.62)");
-        progressDiv.style("color", "rgba(220, 212, 160, 0.38)");
-        return;
-      }
-
-      hintDiv.html("move through the deep");
-      progressDiv.html(`${remaining} hidden place${remaining === 1 ? "" : "s"} remain`);
-      hintDiv.style("color", "rgba(184, 202, 255, 0.44)");
-      progressDiv.style("color", "rgba(208, 220, 255, 0.22)");
     }
 
     function showVerse(text, duration) {
       verseDiv.html(text);
       verseDiv.style("opacity", "0.95");
-
       clearTimeout(showVerse.fadeTimer);
       showVerse.fadeTimer = setTimeout(() => {
         verseDiv.style("opacity", "0");
@@ -568,28 +507,20 @@
 
     function initAudio() {
       if (audioStarted) return;
-
       userStartAudio();
-
       windOsc = new p5.Oscillator("triangle");
       breathOsc = new p5.Oscillator("sine");
       windFilter = new p5.LowPass();
-
       windOsc.disconnect();
       breathOsc.disconnect();
-
       windOsc.connect(windFilter);
       breathOsc.connect(windFilter);
-
       windFilter.freq(650);
       windFilter.res(2.5);
-
       windOsc.amp(0);
       breathOsc.amp(0);
-
       windOsc.start();
       breathOsc.start();
-
       audioStarted = true;
     }
 
@@ -597,18 +528,22 @@
       if (!audioStarted) return;
 
       const movement = constrain(movementSpeed / 18, 0, 1);
-      const drift = map(noise(frameCount * 0.008), 0, 1, 102, 165);
-      const breath = map(sin(frameCount * 0.016), -1, 1, 56, 68);
+      let baseDrift = map(noise(frameCount * 0.008), 0, 1, 102, 165);
+      let baseBreath = map(sin(frameCount * 0.016), -1, 1, 56, 68);
 
-      windOsc.freq(drift + movement * 24);
-      breathOsc.freq(breath);
+      if (inBeam) {
+        baseBreath -= 11;  // deepen
+        breathOsc.freq(baseBreath);
+        breathOsc.amp(map(movement, 0, 1, 0.013, 0.007), 0.32);
+      } else {
+        breathOsc.freq(baseBreath);
+        breathOsc.amp(pointerActive ? map(movement, 0, 1, 0.008, 0.004) : 0.005, 0.24);
+      }
+
+      windOsc.freq(baseDrift + movement * 24);
       windFilter.freq(map(movement, 0, 1, 380, 1200));
-
       const windAmp = pointerActive ? map(movement, 0, 1, 0.003, 0.018) : 0.002;
-      const breathAmpValue = pointerActive ? map(movement, 0, 1, 0.008, 0.004) : 0.005;
-
       windOsc.amp(windAmp, 0.2);
-      breathOsc.amp(breathAmpValue, 0.24);
     }
 
     function setPointer(x, y) {
@@ -618,66 +553,27 @@
       initAudio();
     }
 
-    function tryActivateFinalLight(x, y) {
-      if (!finalLightUnlocked || finalLightActivated) return;
-
-      const fx = width * finalLight.x + sin(frameCount * 0.0017) * 16;
-      const fy = height * finalLight.y + cos(frameCount * 0.0011) * 10;
-      const d = dist(x, y, fx, fy);
-
-      if (d < 48) {
-        finalLightActivated = true;
-        showVerse("In the beginning", 4200);
-      }
-    }
-
-    function mouseMoved() {
-      setPointer(mouseX, mouseY);
-    }
-
-    function mouseDragged() {
-      setPointer(mouseX, mouseY);
-    }
-
-    function mousePressed() {
-      setPointer(mouseX, mouseY);
-      tryActivateFinalLight(mouseX, mouseY);
-    }
+    function mouseMoved() { setPointer(mouseX, mouseY); }
+    function mouseDragged() { setPointer(mouseX, mouseY); }
+    function mousePressed() { setPointer(mouseX, mouseY); }
 
     function touchStarted() {
       initAudio();
-
-      if (touches.length > 0) {
-        setPointer(touches[0].x, touches[0].y);
-        tryActivateFinalLight(touches[0].x, touches[0].y);
-      }
-
+      if (touches.length > 0) setPointer(touches[0].x, touches[0].y);
       return false;
     }
-
     function touchMoved() {
-      if (touches.length > 0) {
-        setPointer(touches[0].x, touches[0].y);
-      }
-
+      if (touches.length > 0) setPointer(touches[0].x, touches[0].y);
       return false;
     }
-
     function touchEnded() {
-      if (touches.length === 0) {
-        pointerActive = false;
-      }
-
+      if (touches.length === 0) pointerActive = false;
       return false;
     }
-
-    function mouseOut() {
-      pointerActive = false;
-    }
+    function mouseOut() { pointerActive = false; }
 
     function windowResized() {
       resizeCanvas(windowWidth, windowHeight);
-      createZones();
       background(220, 70, 4, 1);
     }
   </script>
