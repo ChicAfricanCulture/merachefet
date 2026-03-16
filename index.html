@@ -15,7 +15,11 @@
       touch-action: none;
       font-family: Georgia, "Times New Roman", serif;
     }
-    canvas { display: block; }
+
+    canvas {
+      display: block;
+    }
+
     #verse {
       position: absolute;
       top: 12%;
@@ -35,6 +39,7 @@
       line-height: 1.38;
       z-index: 2;
     }
+
     #hint {
       position: absolute;
       bottom: 7%;
@@ -50,25 +55,36 @@
       z-index: 2;
       max-width: 90%;
     }
+
     @media (max-width: 900px) {
-      #verse { font-size: 1.95rem; }
+      #verse {
+        font-size: 1.95rem;
+      }
     }
+
     @media (max-width: 600px) {
-      #verse { font-size: 1.45rem; top: 10%; letter-spacing: 0.04em; }
-      #hint { font-size: 0.9rem; }
+      #verse {
+        font-size: 1.45rem;
+        top: 10%;
+        letter-spacing: 0.04em;
+      }
+
+      #hint {
+        font-size: 0.9rem;
+      }
     }
   </style>
 </head>
 <body>
   <div id="verse"></div>
-  <div id="hint"></div>
+  <div id="hint">move gently / tap to begin</div>
 
   <script>
     let particles = [];
     let wakes = [];
     let farStars = [];
     let beams = [];
-    let sparkParticles = []; // new: click sparks
+    let sparkParticles = [];
     let verseDiv;
     let hintDiv;
     let pointerX = 0;
@@ -80,7 +96,10 @@
     let cameraDriftX = 0;
     let cameraDriftY = 0;
     let audioStarted = false;
-    let windOsc, breathOsc, windFilter;
+    let windOsc;
+    let breathOsc;
+    let windFilter;
+    let breathFilter;
     let sequenceIndex = 0;
     let lastVerseTime = 0;
     let sequenceStarted = false;
@@ -89,6 +108,7 @@
     let sequenceComplete = false;
     let introShown = false;
     let hintShown = false;
+    let presence = 0;
 
     const beamPhrases = [
       "hovering over the face of the waters",
@@ -102,46 +122,166 @@
     const genesisVerse = "In the beginning God created the heavens and the earth.";
     const REPLAY_TEXT = "hover again";
 
-    class Particle { /* unchanged from previous version */ 
-      // ... (keeping your original Particle class here for brevity)
-      constructor() { /* ... */ }
-      update() { /* ... */ }
-      draw() { /* ... */ }
+    class Particle {
+      constructor() {
+        this.reset(true);
+      }
+
+      reset(initial = false) {
+        this.x = random(width);
+        this.y = random(height);
+        this.z = random(0.2, 1);
+        this.size = random(0.7, 2.8) * this.z;
+        this.baseAlpha = random(0.14, 0.5);
+        this.phase = random(TWO_PI);
+        this.speed = random(0.08, 0.35) * this.z;
+        if (!initial) {
+          this.x = random(width);
+          this.y = -10;
+        }
+      }
+
+      update() {
+        const t = frameCount * 0.003;
+        const nx = noise(this.x * 0.0016, this.y * 0.0014, t);
+        const ny = noise(this.y * 0.0012, this.x * 0.0017, t + 100);
+
+        let vx = map(nx, 0, 1, -0.35, 0.35) + cameraVelocityX() * this.z * 0.18;
+        let vy = this.speed + map(ny, 0, 1, -0.22, 0.38) + cameraVelocityY() * this.z * 0.18;
+
+        const dx = pointerX - this.x;
+        const dy = pointerY - this.y;
+        const d2 = dx * dx + dy * dy;
+        const influenceRadius = 220 + this.z * 220;
+
+        if (d2 < influenceRadius * influenceRadius) {
+          const d = sqrt(max(d2, 1));
+          const force = (1 - d / influenceRadius) * 0.9 * (0.5 + presence);
+          vx -= (dx / d) * force * this.z * 1.2;
+          vy -= (dy / d) * force * this.z * 1.2;
+        }
+
+        this.x += vx;
+        this.y += vy;
+
+        if (this.x < -20) this.x = width + 20;
+        if (this.x > width + 20) this.x = -20;
+        if (this.y < -20) this.y = height + 20;
+        if (this.y > height + 20) this.y = -20;
+      }
+
+      draw() {
+        const shimmer = map(sin(frameCount * 0.03 + this.phase), -1, 1, 0.6, 1.2);
+        const alpha = this.baseAlpha * shimmer;
+        noStroke();
+        fill(210, 18, 100, alpha * 0.35);
+        circle(this.x, this.y, this.size * 4.2);
+        fill(205, 28, 100, alpha);
+        circle(this.x, this.y, this.size);
+      }
     }
 
-    class Wake { /* unchanged */ 
-      // ... 
+    class Wake {
+      constructor(x, y) {
+        this.x = x;
+        this.y = y;
+        this.life = 1;
+        this.size = random(18, 42);
+      }
+
+      update() {
+        this.life -= 0.028;
+        this.size *= 1.03;
+      }
+
+      draw() {
+        noFill();
+        stroke(205, 36, 100, this.life * 0.16);
+        strokeWeight(1.2);
+        circle(this.x, this.y, this.size);
+        stroke(205, 24, 100, this.life * 0.08);
+        circle(this.x, this.y, this.size * 1.7);
+      }
+
+      isDead() {
+        return this.life <= 0;
+      }
     }
 
-    class FarStar { /* unchanged */ 
-      // ...
+    class FarStar {
+      constructor(depth = random(0.2, 1)) {
+        this.depth = depth;
+        this.x = random(width);
+        this.y = random(height);
+        this.size = random(0.6, 2.1) * depth;
+        this.alpha = random(0.1, 0.45);
+        this.phase = random(TWO_PI);
+      }
+
+      draw() {
+        const driftX = cameraDriftX * this.depth * 0.25;
+        const driftY = cameraDriftY * this.depth * 0.25;
+        const x = wrap(this.x + driftX, width);
+        const y = wrap(this.y + driftY, height);
+        const twinkle = map(sin(frameCount * 0.014 + this.phase), -1, 1, 0.5, 1);
+        noStroke();
+        fill(220, 15, 100, this.alpha * twinkle);
+        circle(x, y, this.size);
+      }
     }
 
-    class SoftBeam { /* unchanged — still drifting for atmosphere */ 
-      // ...
-      constructor(index) { /* ... */ }
-      getX() { /* ... */ }
-      getY() { /* ... */ }
-      draw() { /* ... */ }
+    class SoftBeam {
+      constructor(index) {
+        this.index = index;
+        this.phase = random(TWO_PI);
+        this.offset = random(-width * 0.2, width * 0.2);
+        this.span = random(width * 0.18, width * 0.36);
+        this.speed = random(0.0008, 0.0018);
+      }
+
+      getX() {
+        const base = width * (0.15 + (this.index / max(beamPhrases.length - 1, 1)) * 0.7);
+        return base + sin(frameCount * this.speed * 60 + this.phase) * 40 + this.offset * 0.08;
+      }
+
+      getY() {
+        return height * (0.18 + (this.index % 3) * 0.1) + cos(frameCount * this.speed * 46 + this.phase) * 18;
+      }
+
+      draw() {
+        const x = this.getX();
+        const y = this.getY();
+        const activeBoost = sequenceStarted && !sequenceComplete ? 1 : 0.55;
+        noStroke();
+
+        for (let i = 0; i < 6; i++) {
+          const scale = 1 + i * 0.35;
+          const alpha = map(i, 0, 5, 0.018, 0.002) * activeBoost;
+          fill(210, 22, 100, alpha);
+          ellipse(x, y, this.span * scale, height * 0.2 * scale);
+        }
+      }
     }
 
-    class SparkParticle {  // new: gentle click sparks
+    class SparkParticle {
       constructor(x, y) {
         this.x = x;
         this.y = y;
         this.vx = random(-1.2, 1.2);
-        this.vy = random(-2.5, -0.8); // mostly upward
+        this.vy = random(-2.5, -0.8);
         this.size = random(2, 5);
         this.life = 1;
         this.hue = random(195, 225);
       }
+
       update() {
         this.x += this.vx;
         this.y += this.vy;
-        this.vy += 0.08; // gentle gravity
+        this.vy += 0.08;
         this.life -= 0.022;
         this.size *= 0.98;
       }
+
       draw() {
         noStroke();
         fill(this.hue, 40, 100, this.life * 0.7);
@@ -149,12 +289,16 @@
         fill(this.hue, 30, 100, this.life * 0.4);
         circle(this.x, this.y, this.size);
       }
-      isDead() { return this.life <= 0; }
+
+      isDead() {
+        return this.life <= 0;
+      }
     }
 
     function setup() {
       createCanvas(windowWidth, windowHeight);
       colorMode(HSB, 360, 100, 100, 1);
+
       verseDiv = select("#verse");
       hintDiv = select("#hint");
 
@@ -165,28 +309,34 @@
 
       pointerX = width * 0.5;
       pointerY = height * 0.58;
+      lastPointerX = pointerX;
+      lastPointerY = pointerY;
+
       background(220, 70, 4, 1);
     }
 
     function draw() {
       background(220, 70, 4, 0.19);
-      updateCameraDrift();
 
+      updateCameraDrift();
       drawBreathField();
       drawFarStars();
 
-      for (const beam of beams) beam.draw();
+      for (const beam of beams) {
+        beam.draw();
+      }
 
       if (wideBeamActive) {
         wideBeamProgress = min(wideBeamProgress + 0.0008, 1);
         const cx = width * 0.5;
         const ty = height * 0.05;
+
         noStroke();
         for (let i = 0; i < 14; i++) {
-          let p = wideBeamProgress * (1 + i * 0.07);
-          let a = map(i, 0, 13, 0.09, 0.003) * p;
-          let w = width * 1.3 * p;
-          let h = height * 1.5 * p;
+          const p = wideBeamProgress * (1 + i * 0.07);
+          const a = map(i, 0, 13, 0.09, 0.003) * p;
+          const w = width * 1.3 * p;
+          const h = height * 1.5 * p;
           fill(210, 28, 98, a);
           ellipse(cx, ty, w, h);
         }
@@ -194,18 +344,21 @@
 
       drawWakeTrail();
 
-      for (const p of particles) { p.update(); p.draw(); }
+      for (const particle of particles) {
+        particle.update();
+        particle.draw();
+      }
 
-      // draw & update sparks
       for (let i = sparkParticles.length - 1; i >= 0; i--) {
         sparkParticles[i].update();
         sparkParticles[i].draw();
-        if (sparkParticles[i].isDead()) sparkParticles.splice(i, 1);
+        if (sparkParticles[i].isDead()) {
+          sparkParticles.splice(i, 1);
+        }
       }
 
       drawDepthVeil();
       drawPointerHalo();
-
       updatePresence();
       updateSequence();
       updateHintAndIntro();
@@ -213,12 +366,12 @@
     }
 
     function updateSequence() {
-      if (!sequenceStarted) return;
+      if (!sequenceStarted || sequenceComplete) {
+        return;
+      }
 
       const now = millis();
-      if (sequenceComplete) return;
-
-      const interval = random(9000, 11000); // ~9–11 sec variation
+      const interval = random(9000, 11000);
 
       if (sequenceIndex < beamPhrases.length) {
         if (now - lastVerseTime > interval) {
@@ -253,12 +406,14 @@
 
     function updateHintAndIntro() {
       const now = millis();
+
       if (!introShown && now > 300) {
         introShown = true;
         showVerse("before speech, before form", 3200);
         sequenceStarted = true;
         lastVerseTime = now;
       }
+
       if (!hintShown && now > 3000) {
         hintShown = true;
         hintDiv.style("opacity", "0.75");
@@ -268,31 +423,171 @@
     function showVerse(text, duration) {
       verseDiv.html(text);
       verseDiv.style("opacity", "0.95");
+
       clearTimeout(showVerse.fadeTimer);
       showVerse.fadeTimer = setTimeout(() => {
         verseDiv.style("opacity", "0");
       }, duration);
     }
 
-    // ... (keep updateCameraDrift, cameraVelocityX/Y, wrap, drawBreathField, drawFarStars, drawWakeTrail, drawDepthVeil, drawPointerHalo, updatePresence unchanged)
+    function updateCameraDrift() {
+      cameraDriftX = map(noise(frameCount * 0.0012, 10), 0, 1, -26, 26);
+      cameraDriftY = map(noise(frameCount * 0.0012, 80), 0, 1, -18, 18);
+    }
 
-    function initAudio() { /* unchanged */ }
+    function cameraVelocityX() {
+      return cameraDriftX - map(noise((frameCount - 1) * 0.0012, 10), 0, 1, -26, 26);
+    }
+
+    function cameraVelocityY() {
+      return cameraDriftY - map(noise((frameCount - 1) * 0.0012, 80), 0, 1, -18, 18);
+    }
+
+    function wrap(value, maxValue) {
+      if (value < 0) return value + maxValue;
+      if (value > maxValue) return value - maxValue;
+      return value;
+    }
+
+    function drawBreathField() {
+      noStroke();
+
+      for (let i = 0; i < 3; i++) {
+        const w = width * (0.5 + i * 0.22);
+        const h = height * (0.24 + i * 0.12);
+        const x = width * 0.5 + sin(frameCount * 0.002 + i) * 40 + cameraDriftX * 0.25;
+        const y = height * 0.62 + cos(frameCount * 0.0025 + i * 1.7) * 32 + cameraDriftY * 0.2;
+        fill(210, 34, 20 + i * 4, 0.03 - i * 0.006);
+        ellipse(x, y, w, h);
+      }
+    }
+
+    function drawFarStars() {
+      for (const star of farStars) {
+        star.draw();
+      }
+    }
+
+    function drawWakeTrail() {
+      for (let i = wakes.length - 1; i >= 0; i--) {
+        wakes[i].update();
+        wakes[i].draw();
+        if (wakes[i].isDead()) {
+          wakes.splice(i, 1);
+        }
+      }
+    }
+
+    function drawDepthVeil() {
+      noStroke();
+
+      for (let i = 0; i < 8; i++) {
+        const a = map(i, 0, 7, 0.02, 0.001);
+        fill(220, 55, 4, a);
+        rect(0, 0, width, height);
+      }
+
+      for (let i = 0; i < 5; i++) {
+        const r = max(width, height) * (0.7 + i * 0.28);
+        fill(220, 60, 4, 0.03 - i * 0.005);
+        ellipse(width * 0.5, height * 0.5, r * 1.2, r * 0.8);
+      }
+    }
+
+    function drawPointerHalo() {
+      if (!pointerActive) {
+        return;
+      }
+
+      const speedFactor = constrain(movementSpeed / 12, 0, 1);
+      noFill();
+
+      stroke(205, 45, 100, 0.12 + speedFactor * 0.08);
+      strokeWeight(1.5);
+      circle(pointerX, pointerY, 50 + speedFactor * 50);
+
+      stroke(205, 30, 100, 0.07 + speedFactor * 0.05);
+      circle(pointerX, pointerY, 90 + speedFactor * 90);
+
+      noStroke();
+      fill(205, 40, 100, 0.18);
+      circle(pointerX, pointerY, 10 + speedFactor * 8);
+    }
+
+    function updatePresence() {
+      const dx = pointerX - lastPointerX;
+      const dy = pointerY - lastPointerY;
+      const instantSpeed = sqrt(dx * dx + dy * dy);
+      movementSpeed = lerp(movementSpeed, instantSpeed, 0.18);
+
+      const targetPresence = pointerActive ? constrain(map(movementSpeed, 0, 18, 0.18, 1), 0.18, 1) : 0;
+      presence = lerp(presence, targetPresence, 0.08);
+
+      if (pointerActive && frameCount % 5 === 0 && movementSpeed > 0.3) {
+        wakes.push(new Wake(pointerX, pointerY));
+      }
+
+      if (wakes.length > 90) {
+        wakes.splice(0, wakes.length - 90);
+      }
+
+      lastPointerX = pointerX;
+      lastPointerY = pointerY;
+    }
+
+    function initAudio() {
+      if (audioStarted) {
+        return;
+      }
+
+      userStartAudio();
+
+      windOsc = new p5.Noise("pink");
+      windFilter = new p5.LowPass();
+      windOsc.disconnect();
+      windOsc.connect(windFilter);
+      windFilter.freq(600);
+      windFilter.res(2.5);
+      windOsc.amp(0.002);
+      windOsc.start();
+
+      breathOsc = new p5.Oscillator("sine");
+      breathFilter = new p5.LowPass();
+      breathOsc.disconnect();
+      breathOsc.connect(breathFilter);
+      breathFilter.freq(140);
+      breathFilter.res(1.2);
+      breathOsc.freq(62);
+      breathOsc.amp(0.01);
+      breathOsc.start();
+
+      audioStarted = true;
+    }
 
     function updateSound() {
-      if (!audioStarted) return;
+      if (!audioStarted) {
+        return;
+      }
+
       const movement = constrain(movementSpeed / 18, 0, 1);
-      let drift = map(noise(frameCount * 0.008), 0, 1, 102, 165);
+      const drift = map(noise(frameCount * 0.008), 0, 1, 102, 165);
       let breathBase = map(sin(frameCount * 0.016), -1, 1, 56, 68);
 
-      // gentle deepening on movement (instead of beam)
       if (movement > 0.1) {
         breathBase -= 8;
         breathOsc.amp(map(movement, 0, 1, 0.011, 0.006), 0.3);
+      } else {
+        breathOsc.amp(0.011, 0.3);
       }
+
       breathOsc.freq(breathBase);
-      windOsc.freq(drift + movement * 24);
-      windFilter.freq(map(movement, 0, 1, 380, 1200));
+      breathFilter.freq(map(movement, 0, 1, 120, 220));
       windOsc.amp(pointerActive ? map(movement, 0, 1, 0.003, 0.018) : 0.002, 0.2);
+      windFilter.freq(map(movement, 0, 1, 380, 1200));
+      windFilter.res(map(movement, 0, 1, 2.2, 4.2));
+      if (typeof windOsc.pan === "function") {
+        windOsc.pan(map(pointerX, 0, width, -0.25, 0.25));
+      }
     }
 
     function setPointer(x, y) {
@@ -305,7 +600,21 @@
     function mousePressed() {
       setPointer(mouseX, mouseY);
       sparkParticles.push(new SparkParticle(pointerX, pointerY));
-      if (sequenceComplete) restartSequence();
+      if (sequenceComplete) {
+        restartSequence();
+      }
+    }
+
+    function mouseMoved() {
+      setPointer(mouseX, mouseY);
+    }
+
+    function mouseDragged() {
+      setPointer(mouseX, mouseY);
+    }
+
+    function mouseOut() {
+      pointerActive = false;
     }
 
     function touchStarted() {
@@ -313,12 +622,31 @@
       if (touches.length > 0) {
         setPointer(touches[0].x, touches[0].y);
         sparkParticles.push(new SparkParticle(pointerX, pointerY));
-        if (sequenceComplete) restartSequence();
+        if (sequenceComplete) {
+          restartSequence();
+        }
       }
       return false;
     }
 
-    // ... (keep mouseMoved, mouseDragged, touchMoved, touchEnded, mouseOut, windowResized unchanged)
+    function touchMoved() {
+      if (touches.length > 0) {
+        setPointer(touches[0].x, touches[0].y);
+      }
+      return false;
+    }
+
+    function touchEnded() {
+      pointerActive = false;
+      return false;
+    }
+
+    function windowResized() {
+      resizeCanvas(windowWidth, windowHeight);
+      pointerX = constrain(pointerX, 0, width);
+      pointerY = constrain(pointerY, 0, height);
+      background(220, 70, 4, 1);
+    }
   </script>
 </body>
 </html>
